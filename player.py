@@ -47,6 +47,11 @@ class Player(Character):
         self._is_alive = True
         self._damage = 25
         self._name = ""
+    
+        # เพิ่มระบบ Stamina
+        self._max_stamina = 100
+        self._current_stamina = 100
+        self._stamina_regen_rate = 0.5
         
         # Load and set up sprite sheet
         # สมมติเราใช้ Idle.png และ Walk.png เป็นหลัก ตัวอย่างนี้ใช้ Idle สำหรับตอนยืน และ Walk สำหรับเดิน
@@ -233,11 +238,18 @@ class Player(Character):
             return # ไม่ให้เดินตอนกำลังยกโล่
         
         # ถือปุ่ม Shift ซ้ายเพื่อวิ่ง (Speed ห่างจากเดินนิดหน่อย)
-        current_speed = self._speed * 1.8 if keys[pygame.K_LSHIFT] else self._speed
+        if keys[pygame.K_LSHIFT] and self._current_stamina > 0:
+            current_speed = self._speed * 1.8
+        else:
+            current_speed = self._speed
         
         # เช็คปุ่มวิ่ง + ปุ่มเดิน (ซ้ายหรือขวา หรือ A หรือ D)
-        if keys[pygame.K_LSHIFT] and (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_a] or keys[pygame.K_d]):
+        if keys[pygame.K_LSHIFT] and (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_a] or keys[pygame.K_d]) and self._current_stamina > 0:
             self._is_running = True
+            # ลด stamina เมื่อวิ่ง
+            self._current_stamina -= 0.5
+            if self._current_stamina < 0:
+                self._current_stamina = 0
         
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self._rect.x -= current_speed
@@ -267,7 +279,18 @@ class Player(Character):
         if self._is_defending or self._is_hurt:
             return # ห้ามโจมตีถ้ายกโล่อยู่ หรือบาดเจ็บอยู่
             
+        # เช็ค stamina ที่ต้องใช้
+        stamina_cost = 0
+        if attack_type == 1: # โจมตีหนัก (Z) - 1/2 ของหลอด
+            stamina_cost = self._max_stamina / 2
+        elif attack_type == 2: # โจมตีปกติ (C) - 1/4 ของหลอด
+            stamina_cost = self._max_stamina / 4
+            
+        if self._current_stamina < stamina_cost:
+            return # stamina ไม่พอ โจมตีไม่ได้
+            
         if self._attack_cooldown == 0 and self._is_alive:
+            self._current_stamina -= stamina_cost # หัก stamina
             self._is_attacking = True
             self._attack_type = attack_type
             self._current_frame = 0
@@ -308,6 +331,12 @@ class Player(Character):
         # ลด Cooldown
         if self._attack_cooldown > 0:
             self._attack_cooldown -= 1
+            
+        # ฟื้นฟู Stamina
+        if not self._is_running and not self._is_attacking:
+            self._current_stamina += self._stamina_regen_rate
+            if self._current_stamina > self._max_stamina:
+                self._current_stamina = self._max_stamina
 
         # จัดการ Animation เบื้องต้น 
         if self._is_hurt:
@@ -381,6 +410,11 @@ class Player(Character):
         pygame.draw.rect(screen, (50, 50, 50), (20, 40, 200, 15))
         pygame.draw.rect(screen, (0, 200, 0), (20, 40, int(200 * (self._current_hp / self._max_hp)), 15))
         pygame.draw.rect(screen, (255, 255, 255), (20, 40, 200, 15), 2)
+        
+        # วาดหลอด Stamina (ใต้หลอดเลือด)
+        pygame.draw.rect(screen, (50, 50, 50), (20, 60, 200, 10))
+        pygame.draw.rect(screen, (200, 200, 0), (20, 60, int(200 * (self._current_stamina / self._max_stamina)), 10))
+        pygame.draw.rect(screen, (255, 255, 255), (20, 60, 200, 10), 2)
 
         # เลือก Sprite Sheet ตามสถานะการเดิน
         if self._is_hurt:
