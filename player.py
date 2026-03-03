@@ -27,8 +27,8 @@ class Character(ABC):
         pass
 
     @abstractmethod
-    def handle_input(self, keys):
-        """จัดการการกรอกข้อมูลจากผู้เล่น (ปุ่มกด)"""
+    def handle_input(self, keys, mouse_btns=None):
+        """จัดการการกรอกข้อมูลจากผู้เล่น (ปุ่มกด และเมาส์)"""
         pass
 
 # =====================================================================
@@ -41,12 +41,23 @@ class Player(Character):
     def __init__(self, x, y, speed=3): # ลดความเร็วเดินเพื่อความสมจริง
         super().__init__(x, y, speed)
         
+        # เพิ่มระบบ HP ตามหลัก Encapsulation
+        self._max_hp = 150
+        self._current_hp = 150
+        self._is_alive = True
+        self._damage = 25
+        self._name = ""
+        
         # Load and set up sprite sheet
         # สมมติเราใช้ Idle.png และ Walk.png เป็นหลัก ตัวอย่างนี้ใช้ Idle สำหรับตอนยืน และ Walk สำหรับเดิน
         # โหลดภาพและตัดพื้นหลังที่ติดมา (colorkey) ดำ หรือปรับปรุงให้เข้ากับภาพ
         self._sprite_idle = pygame.image.load("Knight_1/Idle.png").convert_alpha()
         self._sprite_walk = pygame.image.load("Knight_1/Walk.png").convert_alpha()
         self._sprite_run = pygame.image.load("Knight_1/Run.png").convert_alpha()
+        self._sprite_attack = pygame.image.load("Knight_1/Attack 1.png").convert_alpha()
+        
+        # โหลด Sprite สำหรับการป้องกัน
+        self._sprite_defend = pygame.image.load("Knight_1/Protect.png").convert_alpha()
         
         # กำหนดขนาดเฟรม (Idle กว้าง 512 มี 4 เฟรม = 128x128)
         self._frame_width = int(self._sprite_idle.get_width() / 4) # 128
@@ -69,11 +80,49 @@ class Player(Character):
         self._animation_timer = 0
         self._is_moving = False
         self._is_running = False # เพิ่มสถานะการวิ่ง
+        self._is_attacking = False
+        self._is_defending = False # สถานะการป้องกัน
+        self._attack_cooldown = 0
 
     @property
     def rect(self):
         """Getter สำหรับ Hitbox เอาไว้ใช้เช็คการชนกับ Area"""
         return self._rect
+
+    @property
+    def is_alive(self):
+        """สถานะการมีชีวิต"""
+        return self._is_alive
+
+    @property
+    def current_hp(self):
+        """Getter สำหรับ HP ปัจจุบัน"""
+        return self._current_hp
+
+    @property
+    def max_hp(self):
+        """Getter สำหรับ HP สูงสุด"""
+        return self._max_hp
+
+    @property
+    def name(self):
+        return self._name
+        
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+    def take_damage(self, amount):
+        """Method เปิดให้ภายนอกสร้างความเสียหาย (Polymorphism: ตัวละครทุกตัวมีฟังก์ชันรับความเสียหายที่อาจต่างกัน)"""
+        if self._is_alive:
+            # ถ้ายกโล่ป้องกันอยู่ จะลดดาเมจที่ได้รับ
+            if self._is_defending:
+                amount = int(amount * 0.2) # เหลือดาเมจแค่ 20%
+                
+            self._current_hp -= amount
+            if self._current_hp <= 0:
+                self._current_hp = 0
+                self._is_alive = False
         
     def _apply_gravity(self, game_areas):
         """Method ภายใน (Encapsulated) สำหรับคำนวณแรงโน้มถ่วงและการชนพื้น"""
@@ -97,22 +146,41 @@ class Player(Character):
     # =====================================================================
     # 4. Polymorphism (พหุสัณฐาน)
     # =====================================================================
-    def handle_input(self, keys):
-        """Override ให้รับปุ่มซ้าย, ขวา, สเปซบาร์, และปุ่มวิ่ง (Shift)"""
+    def handle_input(self, keys, mouse_btns=None):
+        """Override ให้รับปุ่มบังคับและเมาส์"""
+        if mouse_btns is None:
+            mouse_btns = (False, False, False)
+            
+        if self._is_attacking:
+            return  # ไม่ให้เดินหรือป้องกันตอนกำลังโจมตี
+
         self._is_moving = False
         self._is_running = False
+        
+        # จัดการปุ่ม X หรือคลิกขวา (mouse_btns[2]) สำหรับยกโล่ป้องกัน
+        if keys[pygame.K_x] or mouse_btns[2]:
+            if not self._is_defending:
+                self._current_frame = 0 # เริ่มต้นเฟรมป้องกัน
+            self._is_defending = True
+        else:
+            self._is_defending = False
+
+        if self._is_defending:
+            return # ไม่ให้เดินตอนกำลังยกโล่
         
         # ถือปุ่ม Shift ซ้ายเพื่อวิ่ง (Speed ห่างจากเดินนิดหน่อย)
         current_speed = self._speed * 1.8 if keys[pygame.K_LSHIFT] else self._speed
         
-        if keys[pygame.K_LSHIFT] and (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]):
+        # เช็คปุ่มวิ่ง + ปุ่มเดิน (ซ้ายหรือขวา หรือ A หรือ D)
+        if keys[pygame.K_LSHIFT] and (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_a] or keys[pygame.K_d]):
             self._is_running = True
         
-        if keys[pygame.K_LEFT]:
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self._rect.x -= current_speed
             self._facing_right = False
             self._is_moving = True
-        if keys[pygame.K_RIGHT]:
+            
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self._rect.x += current_speed
             self._facing_right = True
             self._is_moving = True
@@ -124,32 +192,58 @@ class Player(Character):
         if self._rect.right > 850: # ยอมให้เกิน 800 ไป 50 พิเซลเพื่อแตะขอบ
             self._rect.right = 850
             
-        if keys[pygame.K_SPACE] and not self._is_jumping:
+        # รองรับกระโดดด้วย Spacebar, W, หรือลูกศรขึ้น
+        if (keys[pygame.K_SPACE] or keys[pygame.K_w] or keys[pygame.K_UP]) and not self._is_jumping:
             self._velocity_y = self._jump_strength
             self._is_jumping = True
             
         self._x = self._rect.x
 
+    def attack(self, target=None):
+        if self._is_defending:
+            return # ห้ามโจมตีถ้ายกโล่อยู่
+            
+        if self._attack_cooldown == 0 and self._is_alive:
+            self._is_attacking = True
+            self._current_frame = 0
+            self._attack_cooldown = 40 # ระยะเวลาหน่วงระหว่างการโจมตีแต่ละครั้ง
+            
+            # โจมตีโดนเป้าหมาย
+            if target and getattr(target, 'is_alive', False):
+                distance = target.rect.centerx - self._rect.centerx
+                # เช็คว่าหันหน้าถูกทางและอยู่ในระยะโจมตี
+                if (self._facing_right and distance > 0) or (not self._facing_right and distance < 0):
+                    if abs(distance) < 90: # ระยะโจมตีของ Player
+                        target.take_damage(self._damage)
+
     def update(self, game_areas):
         """Override เพื่ออัปเดตฟิสิกส์และการขยับภาพ (Animation)"""
+        if not self._is_alive:
+            return
         self._apply_gravity(game_areas)
         
+        # ลด Cooldown
+        if self._attack_cooldown > 0:
+            self._attack_cooldown -= 1
+
         # จัดการ Animation เบื้องต้น 
-        # (Idle = 4 frame, Walk = 8 frame, Run = 7 frame รูป Run กว้าง 896)
-        if self._is_running:
+        if self._is_attacking:
+            max_frames = 5 if self._sprite_attack.get_width() // self._sprite_attack.get_height() == 5 else 4 # ป้องกันเฟรมโจมตีผิดปกติ
+        elif self._is_defending:
+            max_frames = max(1, self._sprite_defend.get_width() // self._sprite_defend.get_height())
+        elif self._is_running:
             max_frames = 7
-            self._frame_width = int(self._sprite_run.get_width() / 7)
         elif self._is_moving:
             max_frames = 8
-            self._frame_width = int(self._sprite_walk.get_width() / 8)
         else:
             max_frames = 4
-            self._frame_width = int(self._sprite_idle.get_width() / 4)
 
         self._animation_timer += 1
         
         # ปรับความหน่วงของเฟรมเพิ่มขึ้น เพื่อให้แสดงผลแต่ละท่าทางชัดและสมูทขึ้น
-        if self._is_running:
+        if self._is_attacking:
+            animation_delay = 5 
+        elif self._is_running:
             animation_delay = 4 # สับขาไวขึ้นนิดนึงตอนวิ่ง
         elif self._is_moving:
             animation_delay = 2 
@@ -158,24 +252,67 @@ class Player(Character):
             
         if self._animation_timer > animation_delay: # ความเร็วการเปลี่ยนเฟรม
             self._animation_timer = 0
-            self._current_frame += 1
-
-        # ป้องกัน index ทะลุ
-        if self._current_frame >= max_frames:
-            self._current_frame = 0
+            
+            if self._is_attacking:
+                if self._current_frame < max_frames - 1:
+                    self._current_frame += 1
+                else:
+                    self._is_attacking = False # จบอนิเมชันโจมตี
+                    self._current_frame = 0
+            elif self._is_defending:
+                # ตั้งแต่จุดยกโล่ไปจนถึงเฟรมสุดท้ายและค้างไว้ที่เฟรมนั้น
+                if self._current_frame < max_frames - 1:
+                    self._current_frame += 1
+            else:
+                self._current_frame += 1
+                # ป้องกัน index ทะลุ
+                if self._current_frame >= max_frames:
+                    self._current_frame = 0
 
     def draw(self, screen):
         """Override เพื่อวาดภาพตัวละครลงจอ โดยตัดส่วนนึงมาจาก Sprite Sheet"""
+        if not self._is_alive:
+            return
+            
+        # วาดชื่อผู้เล่นเหนือหลอดเลือดแบบบอส
+        if self._name != "":
+            if not hasattr(self, '_font'):
+                self._font = pygame.font.SysFont("Arial", 28, bold=True)
+            name_surf = self._font.render(self._name, True, (255, 255, 255))
+            screen.blit(name_surf, (20, 10))
+
+        # วาดหลอดเลือด Player (มุมซ้ายบน เลื่อนลงเพื่อให้มีที่วางชื่อ)
+        pygame.draw.rect(screen, (50, 50, 50), (20, 40, 200, 15))
+        pygame.draw.rect(screen, (0, 200, 0), (20, 40, int(200 * (self._current_hp / self._max_hp)), 15))
+        pygame.draw.rect(screen, (255, 255, 255), (20, 40, 200, 15), 2)
+
         # เลือก Sprite Sheet ตามสถานะการเดิน
-        if self._is_running:
+        if self._is_attacking:
+            current_sheet = self._sprite_attack
+            max_frames = 5 if self._sprite_attack.get_width() // self._sprite_attack.get_height() == 5 else 4
+        elif self._is_defending:
+            current_sheet = self._sprite_defend
+            max_frames = max(1, self._sprite_defend.get_width() // self._sprite_defend.get_height())
+        elif self._is_running:
             current_sheet = self._sprite_run
+            max_frames = 7
         elif self._is_moving:
             current_sheet = self._sprite_walk
+            max_frames = 8
         else:
             current_sheet = self._sprite_idle
+            max_frames = 4
         
+        # คำนวณขนาดใหม่ทุกครั้งที่วาด เพื่อป้องกันปัญหาความสูง-กว้างต่างกันในแต่ละ Sprite Sheet
+        frame_width = current_sheet.get_width() // max_frames
+        frame_height = current_sheet.get_height()
+        
+        # ป้องกัน index เฟรมทะลุระหว่างเปลี่ยนสถานะ
+        if self._current_frame >= max_frames:
+            self._current_frame = 0
+
         # ดึงภาพเฟรมปัจจุบัน
-        frame_rect = pygame.Rect(self._current_frame * self._frame_width, 0, self._frame_width, self._frame_height)
+        frame_rect = pygame.Rect(self._current_frame * frame_width, 0, frame_width, frame_height)
         frame_image = current_sheet.subsurface(frame_rect)
         
         # ย่อส่วนภาพ (Scale down)
