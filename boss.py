@@ -69,6 +69,7 @@ class MinotaurBoss(Enemy):
         self._sprite_idle = pygame.image.load("Minotaur_1/Idle.png").convert_alpha()
         self._sprite_walk = pygame.image.load("Minotaur_1/Walk.png").convert_alpha()
         self._sprite_attack = pygame.image.load("Minotaur_1/Attack.png").convert_alpha()
+        self._sprite_hurt = pygame.image.load("Minotaur_1/Hurt.png").convert_alpha()
         self._sprite_dead = pygame.image.load("Minotaur_1/Dead.png").convert_alpha()
         
         self._action = "idle" # "idle", "walk", "attack", "dead"
@@ -94,6 +95,10 @@ class MinotaurBoss(Enemy):
                 self._action = "dead"
                 self._current_frame = 0
                 self._animation_timer = 0
+            else:
+                self._action = "hurt"
+                self._current_frame = 0
+                self._animation_timer = 0
                 
     def update(self, game_areas, player=None):
         if not self._is_alive:
@@ -114,18 +119,19 @@ class MinotaurBoss(Enemy):
                     self._attack_cooldown -= 1
                     
                 # ตัดสินใจพฤติกรรม
-                if abs_distance <= self._attack_range and self._attack_cooldown == 0 and self._action != "attack":
-                    self.attack(player)
-                elif abs_distance <= self._detect_range and self._action != "attack" and not player.rect.colliderect(self._rect):
-                    self._action = "walk"
-                    if self._facing_right:
-                        self._rect.x += self._speed
-                    else:
-                        self._rect.x -= self._speed
-                elif self._action != "attack":
-                    self._action = "idle"
+                if self._action != "hurt":
+                    if abs_distance <= self._attack_range and self._attack_cooldown == 0 and self._action != "attack":
+                        self.attack(player)
+                    elif abs_distance <= self._detect_range and self._action != "attack" and not player.rect.colliderect(self._rect):
+                        self._action = "walk"
+                        if self._facing_right:
+                            self._rect.x += self._speed
+                        else:
+                            self._rect.x -= self._speed
+                    elif self._action != "attack":
+                        self._action = "idle"
             else:
-                if self._action != "attack":
+                if self._action not in ("attack", "hurt"):
                     self._action = "idle"
 
         # ระบบแรงโน้มถ่วงง่ายๆ
@@ -140,6 +146,8 @@ class MinotaurBoss(Enemy):
         # อัพเดต Animation ของ Boss
         if self._action == "dead":
             sheet = self._sprite_dead
+        elif self._action == "hurt":
+            sheet = self._sprite_hurt
         elif self._action == "attack":
             sheet = self._sprite_attack
         elif self._action == "walk":
@@ -152,7 +160,12 @@ class MinotaurBoss(Enemy):
         max_frames = frames_count if frames_count > 0 else 4
         
         self._animation_timer += 1
-        speed_anim = 8 if self._action == "attack" else 6
+        if self._action == "attack":
+            speed_anim = 8
+        elif self._action == "hurt":
+            speed_anim = 5
+        else:
+            speed_anim = 6
         
         if self._animation_timer >= speed_anim:
             self._animation_timer = 0
@@ -162,6 +175,11 @@ class MinotaurBoss(Enemy):
                     self._current_frame += 1
                 else:
                     self._is_alive = False # ตายสนิทเมื่อรันอนิเมชันจบ
+            elif self._action == "hurt":
+                self._current_frame += 1
+                if self._current_frame >= max_frames:
+                    self._current_frame = 0
+                    self._action = "idle" # โดนตีจบกลับมายืน
             else:
                 self._current_frame += 1
                 if self._current_frame >= max_frames:
@@ -184,6 +202,8 @@ class MinotaurBoss(Enemy):
             
         if self._action == "dead":
             current_sheet = self._sprite_dead
+        elif self._action == "hurt":
+            current_sheet = self._sprite_hurt
         elif self._action == "attack":
             current_sheet = self._sprite_attack
         elif self._action == "walk":

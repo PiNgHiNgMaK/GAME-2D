@@ -217,3 +217,48 @@ class PauseMenu:
         pygame.draw.rect(screen, (200, 50, 50), self.quit_btn_rect, border_radius=10)
         quit_surf = self.font.render("QUIT", True, (255, 255, 255))
         screen.blit(quit_surf, quit_surf.get_rect(center=self.quit_btn_rect.center))
+
+# =====================================================================
+# เมนูจบเกม (Game Over / Victory Menu)
+# =====================================================================
+class GameOverMenu:
+    def __init__(self, width, height, title="Game Over", color=(255, 0, 0)):
+        self.width = width
+        self.height = height
+        self.title = title
+        self.color = color
+        
+        self.font = pygame.font.SysFont("Arial", 36)
+        self.large_font = pygame.font.SysFont("Arial", 64, bold=True)
+        
+        self.play_again_btn_rect = pygame.Rect(width//2 - 125, height//2, 250, 50)
+        self.quit_btn_rect = pygame.Rect(width//2 - 125, height//2 + 70, 250, 50)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.play_again_btn_rect.collidepoint(event.pos):
+                return "play_again"
+            if self.quit_btn_rect.collidepoint(event.pos):
+                return "quit"
+        return None
+
+    def draw(self, screen):
+        # วาดพื้นหลังทำโปร่งแสงทับเกม
+        overlay = pygame.Surface((self.width, self.height))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        screen.blit(overlay, (0, 0))
+        
+        title_surf = self.large_font.render(self.title, True, self.color)
+        title_rect = title_surf.get_rect(center=(self.width//2, self.height//2 - 80))
+        screen.blit(title_surf, title_rect)
+        
+        # ปุ่ม Play Again
+        pygame.draw.rect(screen, (0, 200, 0), self.play_again_btn_rect, border_radius=10)
+        play_again_surf = self.font.render("PLAY AGAIN", True, (255, 255, 255))
+        screen.blit(play_again_surf, play_again_surf.get_rect(center=self.play_again_btn_rect.center))
+        
+        # ปุ่ม Quit
+        pygame.draw.rect(screen, (200, 50, 50), self.quit_btn_rect, border_radius=10)
+        quit_surf = self.font.render("QUIT", True, (255, 255, 255))
+        screen.blit(quit_surf, quit_surf.get_rect(center=self.quit_btn_rect.center))

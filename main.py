@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from background.back_g import background
 from player import Player
 from boss import MinotaurBoss, BossUI
-from menu import MainMenu, SettingsMenu, PauseMenu
+from menu import MainMenu, SettingsMenu, PauseMenu, GameOverMenu
 
 # =====================================================================
 # 1. Abstraction (นามธรรม)
@@ -81,7 +81,13 @@ bg = background(screen, "bg-1.jpg")
 # ระบบเปลี่ยนแปลงฉาก (Scene Management)
 # =====================================================================
 # สร้างฟังก์ชันสำหรับโหลดฉากตามหมายเลข
-def load_scene(scene_number):
+def load_scene(scene_number, is_reset=False):
+    if is_reset:
+        return background(screen, "bg-1.jpg"), [
+            WalkableArea(0, 450, 800, 50),
+            ObstacleArea(350, 320, 50, 80)
+        ]
+        
     if scene_number == 1:
         # ฉากที่ 1
         new_bg = background(screen, "bg-1.jpg")
@@ -140,6 +146,21 @@ player_name = ""
 # ปุ่มเมนู/หยุดเกมชั่วคราวขณะเล่น (อยู่บนขวา)
 in_game_menu_btn = pygame.Rect(710, 10, 80, 35)
 
+game_over_menu = None  # สต็อกเก็บเมนูจบเกมเมื่อเกิดเหตุการณ์
+
+# ฟังก์ชันรีเซ็ตเกม
+def reset_game():
+    global current_scene, bg, game_areas, player, current_boss, current_boss_ui, game_state, game_over_menu
+    current_scene = 1
+    bg, game_areas = load_scene(1, is_reset=True)
+    player = Player(50, 100)
+    if player_name != "":
+        player.name = player_name
+    current_boss = None
+    current_boss_ui = None
+    game_state = "GAME"
+    game_over_menu = None
+
 while running:
     # 1. การจัดการ Event ปิดเกม
     for event in pygame.event.get():
@@ -174,6 +195,13 @@ while running:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if in_game_menu_btn.collidepoint(event.pos):
                     game_state = "PAUSED"
+        elif game_state == "GAME_OVER":
+            if game_over_menu:
+                action = game_over_menu.handle_event(event)
+                if action == "play_again":
+                    reset_game()
+                elif action == "quit":
+                    running = False
 
     # ระบบกด ESC เพื่อสลับหยุดเกม/เล่นต่อ
     if event.type == pygame.KEYDOWN and game_state in ["GAME", "PAUSED"]:
@@ -215,10 +243,15 @@ while running:
                 if hasattr(player, '_x'):
                     player._x = old_x
 
-        # กด Z หรือ คลึกเมาส์ซ้าย เพื่อโจมตี
+        # กด Z หรือ คลึกเมาส์ซ้าย เพื่อโจมตี (ท่าที่ 1)
         if keys[pygame.K_z] or mouse_btns[0]:
             target = current_boss if current_scene == 4 else None
-            player.attack(target)
+            player.attack(target, attack_type=1)
+            
+        # กด C เพื่อโจมตี (ท่าที่ 2)
+        if keys[pygame.K_c]:
+            target = current_boss if current_scene == 4 else None
+            player.attack(target, attack_type=2)
 
         # 3. อัปเดตตรรกะและฟิสิกส์ต่างๆ ในเกม
         player.update(game_areas)
@@ -242,7 +275,7 @@ while running:
             bg, game_areas = load_scene(current_scene)
             player._rect.x = 10
             
-        # การเดินย้อนกลับเปลี่ยนฉาก (ทะลุซ้าย)
+        # เดินย้อนกลับเปลี่ยนฉาก (ทะลุซ้าย)
         elif player.rect.left <= 0:
             if current_scene == 2:
                 current_scene = 1
@@ -286,17 +319,19 @@ while running:
         btn_surf = pygame.font.SysFont("Arial", 16, bold=True).render("MENU", True, (255, 255, 255))
         screen.blit(btn_surf, btn_surf.get_rect(center=in_game_menu_btn.center))
 
-    # แสดงผลแพ้ชนะ
-    if not player.is_alive:
-        font = pygame.font.SysFont("Arial", 60, bold=True)
-        text = font.render("You Loose!", True, (255, 0, 0))
-        text_rect = text.get_rect(center=(400, 250))
-        screen.blit(text, text_rect)
-    elif current_scene == 4 and current_boss and not current_boss.is_alive:
-        font = pygame.font.SysFont("Arial", 60, bold=True)
-        text = font.render("You Win!", True, (0, 255, 0))
-        text_rect = text.get_rect(center=(400, 250))
-        screen.blit(text, text_rect)
+    # ตรวจสอบการพ่ายแพ้และชัยชนะ (เปลี่ยน State ไปที่ GAME_OVER)
+    if not player.is_alive and game_state == "GAME":
+        if not game_over_menu: # สร้างเมนูเมื่อตายครั้งแรก
+            game_over_menu = GameOverMenu(800, 500, title="You Loose!", color=(255, 0, 0))
+            game_state = "GAME_OVER"
+    elif current_scene == 4 and current_boss and not current_boss.is_alive and game_state == "GAME":
+        if not game_over_menu: # สร้างเมนูเมื่อขนะครั้งแรก
+            game_over_menu = GameOverMenu(800, 500, title="You Win!", color=(0, 255, 0))
+            game_state = "GAME_OVER"
+
+    # วาดเมนู Game Over ถ้าอยู่ใน State GAME_OVER
+    if game_state == "GAME_OVER" and game_over_menu:
+        game_over_menu.draw(screen)
         
     # วาดเมนูหยุดเกมทับถ้าอยู่ใน State PAUSED
     if game_state == "PAUSED":

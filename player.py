@@ -55,6 +55,8 @@ class Player(Character):
         self._sprite_walk = pygame.image.load("Knight_1/Walk.png").convert_alpha()
         self._sprite_run = pygame.image.load("Knight_1/Run.png").convert_alpha()
         self._sprite_attack = pygame.image.load("Knight_1/Attack 1.png").convert_alpha()
+        self._sprite_attack2 = pygame.image.load("Knight_1/Attack 3.png").convert_alpha()
+        self._sprite_hurt = pygame.image.load("Knight_1/Hurt.png").convert_alpha()
         
         # โหลด Sprite สำหรับการป้องกัน
         self._sprite_defend = pygame.image.load("Knight_1/Protect.png").convert_alpha()
@@ -81,7 +83,9 @@ class Player(Character):
         self._is_moving = False
         self._is_running = False # เพิ่มสถานะการวิ่ง
         self._is_attacking = False
+        self._attack_type = 1 # เก็บประเภทการโจมตี (1 หรือ 2)
         self._is_defending = False # สถานะการป้องกัน
+        self._is_hurt = False # สถานะบาดเจ็บ
         self._attack_cooldown = 0
 
     @property
@@ -117,12 +121,15 @@ class Player(Character):
         if self._is_alive:
             # ถ้ายกโล่ป้องกันอยู่ จะลดดาเมจที่ได้รับ
             if self._is_defending:
-                amount = int(amount * 0.2) # เหลือดาเมจแค่ 20%
+                amount = int(amount * 0.1) # เหลือดาเมจแค่ 20%
                 
             self._current_hp -= amount
             if self._current_hp <= 0:
                 self._current_hp = 0
                 self._is_alive = False
+            else:
+                self._is_hurt = True
+                self._current_frame = 0
         
     def _apply_gravity(self, game_areas):
         """Method ภายใน (Encapsulated) สำหรับคำนวณแรงโน้มถ่วงและการชนพื้น"""
@@ -151,8 +158,8 @@ class Player(Character):
         if mouse_btns is None:
             mouse_btns = (False, False, False)
             
-        if self._is_attacking:
-            return  # ไม่ให้เดินหรือป้องกันตอนกำลังโจมตี
+        if self._is_attacking or self._is_hurt:
+            return  # ไม่ให้เดินหรือป้องกันตอนกำลังโจมตี หรือ กำลังบาดเจ็บ
 
         self._is_moving = False
         self._is_running = False
@@ -199,12 +206,13 @@ class Player(Character):
             
         self._x = self._rect.x
 
-    def attack(self, target=None):
-        if self._is_defending:
-            return # ห้ามโจมตีถ้ายกโล่อยู่
+    def attack(self, target=None, attack_type=1):
+        if self._is_defending or self._is_hurt:
+            return # ห้ามโจมตีถ้ายกโล่อยู่ หรือบาดเจ็บอยู่
             
         if self._attack_cooldown == 0 and self._is_alive:
             self._is_attacking = True
+            self._attack_type = attack_type
             self._current_frame = 0
             self._attack_cooldown = 40 # ระยะเวลาหน่วงระหว่างการโจมตีแต่ละครั้ง
             
@@ -227,8 +235,13 @@ class Player(Character):
             self._attack_cooldown -= 1
 
         # จัดการ Animation เบื้องต้น 
-        if self._is_attacking:
-            max_frames = 5 if self._sprite_attack.get_width() // self._sprite_attack.get_height() == 5 else 4 # ป้องกันเฟรมโจมตีผิดปกติ
+        if self._is_hurt:
+            max_frames = 2 if self._sprite_hurt.get_width() // self._sprite_hurt.get_height() == 2 else 4
+        elif self._is_attacking:
+            if self._attack_type == 1:
+                max_frames = 5 if self._sprite_attack.get_width() // self._sprite_attack.get_height() == 5 else 4
+            else:
+                max_frames = 5 if self._sprite_attack2.get_width() // self._sprite_attack2.get_height() == 5 else 4
         elif self._is_defending:
             max_frames = max(1, self._sprite_defend.get_width() // self._sprite_defend.get_height())
         elif self._is_running:
@@ -241,7 +254,9 @@ class Player(Character):
         self._animation_timer += 1
         
         # ปรับความหน่วงของเฟรมเพิ่มขึ้น เพื่อให้แสดงผลแต่ละท่าทางชัดและสมูทขึ้น
-        if self._is_attacking:
+        if self._is_hurt:
+            animation_delay = 6
+        elif self._is_attacking:
             animation_delay = 5 
         elif self._is_running:
             animation_delay = 4 # สับขาไวขึ้นนิดนึงตอนวิ่ง
@@ -253,7 +268,13 @@ class Player(Character):
         if self._animation_timer > animation_delay: # ความเร็วการเปลี่ยนเฟรม
             self._animation_timer = 0
             
-            if self._is_attacking:
+            if self._is_hurt:
+                if self._current_frame < max_frames - 1:
+                    self._current_frame += 1
+                else:
+                    self._is_hurt = False # จบอนิเมชันบาดเจ็บ กลับไปยืน
+                    self._current_frame = 0
+            elif self._is_attacking:
                 if self._current_frame < max_frames - 1:
                     self._current_frame += 1
                 else:
@@ -287,9 +308,16 @@ class Player(Character):
         pygame.draw.rect(screen, (255, 255, 255), (20, 40, 200, 15), 2)
 
         # เลือก Sprite Sheet ตามสถานะการเดิน
-        if self._is_attacking:
-            current_sheet = self._sprite_attack
-            max_frames = 5 if self._sprite_attack.get_width() // self._sprite_attack.get_height() == 5 else 4
+        if self._is_hurt:
+            current_sheet = self._sprite_hurt
+            max_frames = 2 if self._sprite_hurt.get_width() // self._sprite_hurt.get_height() == 2 else 4
+        elif self._is_attacking:
+            if self._attack_type == 1:
+                current_sheet = self._sprite_attack
+                max_frames = 5 if self._sprite_attack.get_width() // self._sprite_attack.get_height() == 5 else 4
+            else:
+                current_sheet = self._sprite_attack2
+                max_frames = 5 if self._sprite_attack2.get_width() // self._sprite_attack2.get_height() == 5 else 4
         elif self._is_defending:
             current_sheet = self._sprite_defend
             max_frames = max(1, self._sprite_defend.get_width() // self._sprite_defend.get_height())
