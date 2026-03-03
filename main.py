@@ -1,9 +1,10 @@
 import pygame
+import os
 from abc import ABC, abstractmethod
 from background.back_g import background
 from player import Player
 from boss import MinotaurBoss, BossUI
-from menu import MainMenu, SettingsMenu, PauseMenu, GameOverMenu
+from menu import MainMenu, SettingsMenu, PauseMenu, GameOverMenu, play_click_sound
 
 # =====================================================================
 # 1. Abstraction (นามธรรม)
@@ -69,13 +70,28 @@ class ObstacleArea(Area):
 # Main Game Loop
 # =====================================================================
 pygame.init()
+pygame.mixer.init()
+
+# โลดไฟล์เสียง
+try:
+    if os.path.exists("assets/sound/upside down grin2.ogg"):
+        pygame.mixer.music.load("assets/sound/upside down grin2.ogg")
+        pygame.mixer.music.set_volume(0.4)
+    
+    if os.path.exists("assets/sound/creatorshome-draw-a-sword-327726.mp3"):
+        SPAWN_SOUND = pygame.mixer.Sound("assets/sound/creatorshome-draw-a-sword-327726.mp3")
+        SPAWN_SOUND.set_volume(0.8)
+    else:
+        SPAWN_SOUND = None
+except:
+    SPAWN_SOUND = None
 
 screen = pygame.display.set_mode((800, 500))
-pygame.display.set_caption("My Game")
+pygame.display.set_caption("Jao ting nong")
 screen.fill((255, 255, 255))
 
 # อิงตามเดิมที่มีอยู่
-bg = background(screen, "bg-1.jpg")
+bg = background(screen, "background/bg-1.jpg")
 
 # =====================================================================
 # ระบบเปลี่ยนแปลงฉาก (Scene Management)
@@ -83,44 +99,44 @@ bg = background(screen, "bg-1.jpg")
 # สร้างฟังก์ชันสำหรับโหลดฉากตามหมายเลข
 def load_scene(scene_number, is_reset=False):
     if is_reset:
-        return background(screen, "bg-1.jpg"), [
-            WalkableArea(0, 450, 800, 50),
+        return background(screen, "background/bg-1.jpg"), [
+            WalkableArea(0, 410, 800, 90),
             ObstacleArea(350, 320, 50, 80)
         ]
         
     if scene_number == 1:
         # ฉากที่ 1
-        new_bg = background(screen, "bg-1.jpg")
+        new_bg = background(screen, "background/bg-1.jpg")
         new_areas = [
-            WalkableArea(0, 450, 800, 50),       # พื้นดิน
+            WalkableArea(0, 410, 800, 90),       # พื้นดิน
             ObstacleArea(350, 320, 50, 80)       # กำแพงกั้นกลางฉาก
         ]
         return new_bg, new_areas
         
     elif scene_number == 2:
         # ฉากที่ 2
-        new_bg = background(screen, "bg-2.jpg")
+        new_bg = background(screen, "background/bg-2.jpg")
         new_areas = [
             # พื้นดินฉาก 2 อาจปรับระดับความสูงหรือสร้างสิ่งกีดขวางแบบใหม่ได้
-            WalkableArea(0, 450, 800, 50),       # พื้นดิน
+            WalkableArea(0, 410, 800, 90),       # พื้นดิน
         ]
         return new_bg, new_areas
         
     elif scene_number == 3:
         # ฉากที่ 3
-        new_bg = background(screen, "bg-3.jpg")
+        new_bg = background(screen, "background/bg-3.jpg")
         new_areas = [
             # พื้นดินฉาก 3
-            WalkableArea(0, 450, 800, 50),       # พื้นดิน
+            WalkableArea(0, 430, 800, 70),       # พื้นดิน
         ]
         return new_bg, new_areas
         
     elif scene_number == 4:
         # ฉากที่ 4
-        new_bg = background(screen, "Dungeon - Pixel Art _ Animations, Mathieu Chauderlot.jpg")
+        new_bg = background(screen, "background/bg-4.jpg")
         new_areas = [
-            # พื้นดินฉาก 4
-            WalkableArea(0, 450, 800, 50),       # พื้นดิน
+            # พื้นดินฉาก 4 (สะพานศิลาและฐาน)
+            WalkableArea(0, 395, 800, 105),       # พื้นดิน
         ]
         return new_bg, new_areas
 
@@ -128,6 +144,48 @@ current_scene = 1
 bg, game_areas = load_scene(current_scene)
 current_boss = None
 current_boss_ui = None
+current_monsters = []  # OCP: รองรับมอนสเตอร์อื่นๆ นอกจากบอส
+health_potions = [] # ลิสต์เก็บขวดเลือดที่ดรอปในฉาก
+
+# ฟังก์ชันหุ้มสำหรับการเปลี่ยนฉากพร้อมเอฟเฟกต์
+def change_scene(scene_num, player_new_x=None, player_new_right=None):
+    global bg, game_areas, current_scene, health_potions
+    
+    # 1. เล่นไฟล์เสียงเปลี่ยนฉาก (ถ้ามี)
+    try:
+        if os.path.exists("assets/sound/Menu Selection Click.wav"):
+            pygame.mixer.Sound("assets/sound/Menu Selection Click.wav").play()
+    except:
+        pass
+        
+    # 2. ทำเอฟเฟกต์ Fade Out
+    fade_surf = pygame.Surface((800, 500))
+    fade_surf.fill((0, 0, 0))
+    for alpha in range(0, 255, 15):
+        fade_surf.set_alpha(alpha)
+        screen.blit(fade_surf, (0, 0))
+        pygame.display.update()
+        pygame.time.delay(10)
+        
+    # 3. โหลดข้อมูลฉากใหม่
+    current_scene = scene_num
+    bg, game_areas = load_scene(current_scene)
+    health_potions = [] # ล้างไอเทมฉากเก่า
+    
+    if player_new_x is not None:
+        player._rect.x = player_new_x
+    if player_new_right is not None:
+        player._rect.right = player_new_right
+        
+    # 4. ทำเอฟเฟกต์ Fade In
+    for alpha in range(255, 0, -15):
+        bg.draw()
+        for area in game_areas: area.draw(screen)
+        player.draw(screen)
+        fade_surf.set_alpha(alpha)
+        screen.blit(fade_surf, (0, 0))
+        pygame.display.update()
+        pygame.time.delay(10)
 
 # สร้างตัวละครผู้เล่น (Abstaction & Encapsulation จาก Player class)
 player = Player(50, 100) # เริ่มต้นที่ขอบซ้ายของจอ
@@ -158,8 +216,18 @@ def reset_game():
         player.name = player_name
     current_boss = None
     current_boss_ui = None
+    current_monsters = []
     game_state = "GAME"
     game_over_menu = None
+    
+    # เกิดใหม่เล่นเสียงชักดาบ และเริ่มเพลงใหม่
+    if settings_menu.sound_on:
+        if SPAWN_SOUND:
+            SPAWN_SOUND.play()
+        try:
+            pygame.mixer.music.play(-1)
+        except:
+            pass
 
 while running:
     # 1. การจัดการ Event ปิดเกม
@@ -174,6 +242,15 @@ while running:
                 player_name = data 
                 player.name = player_name
                 game_state = "GAME"
+                
+                # เริ่มเกมเล่นเสียงชักดาบ และเปิดเพลงฉากหลัง (Loop бесконечно)
+                if settings_menu.sound_on:
+                    if SPAWN_SOUND:
+                        SPAWN_SOUND.play()
+                    try:
+                        pygame.mixer.music.play(-1)
+                    except:
+                        pass
             elif action == "settings":
                 game_state = "SETTINGS"
             elif action == "quit":
@@ -194,6 +271,7 @@ while running:
         elif game_state == "GAME":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if in_game_menu_btn.collidepoint(event.pos):
+                    play_click_sound()
                     game_state = "PAUSED"
         elif game_state == "GAME_OVER":
             if game_over_menu:
@@ -210,6 +288,15 @@ while running:
                 game_state = "PAUSED"
             elif game_state == "PAUSED":
                 game_state = "GAME"
+
+    # ระบบจัดการเสียงจากเมนูตั้งค่า
+    if not settings_menu.sound_on:
+        pygame.mixer.music.pause()
+    else:
+        if game_state in ["GAME", "PAUSED"]:
+            pygame.mixer.music.unpause()
+        else:
+            pygame.mixer.music.pause() # ไม่เล่นเพลงในหน้าเมนูหลัก
 
     # วาดหน้าเมนูถ้ายังไม่เริ่มเกม
     if game_state == "MENU":
@@ -242,59 +329,89 @@ while running:
                 player._rect.x = old_x
                 if hasattr(player, '_x'):
                     player._x = old_x
+                    
+        # ป้องกันเดินทะลุมอนสเตอร์ตัวอื่นๆ 
+        for m in current_monsters:
+            if m.is_alive and player.is_alive and player.rect.colliderect(m.rect):
+                player._rect.x = old_x
+                if hasattr(player, '_x'):
+                    player._x = old_x
 
-        # กด Z หรือ คลึกเมาส์ซ้าย เพื่อโจมตี (ท่าที่ 1)
-        if keys[pygame.K_z] or mouse_btns[0]:
-            target = current_boss if current_scene == 4 else None
-            player.attack(target, attack_type=1)
-            
-        # กด C เพื่อโจมตี (ท่าที่ 2)
-        if keys[pygame.K_c]:
-            target = current_boss if current_scene == 4 else None
+
+        # เลือกท่าโจมตี (SRP: หน้าที่รับคำสั่งคีย์บอร์ดแล้วส่งให้ Player ดำเนินการ)
+        # ทำการหาเป้าหมายโจมตี (Polymorphism: เป้าหมายอะไรก็ได้ที่สืบทอดจาก Enemy/Character และมี take_damage)
+        target = None
+        if current_scene == 4:
+            target = current_boss
+        elif current_monsters:
+            # เลือกเป้าหมายตัวแรกที่ยังมีชีวิต (อาจขยายเป็นเลือกตัวที่ใกล้ที่สุดภายหลัง)
+            target = next((m for m in current_monsters if m.is_alive), None)
+
+        if keys[pygame.K_c] or (keys[pygame.K_LSHIFT] and mouse_btns[0]):
+            # ท่าที่ 2: กด C หรือ Shift+คลิกซ้าย
             player.attack(target, attack_type=2)
+        elif keys[pygame.K_z] or mouse_btns[0]:
+            # ท่าที่ 1: กด Z หรือ คลิกซ้ายปกติ
+            player.attack(target, attack_type=1)
 
         # 3. อัปเดตตรรกะและฟิสิกส์ต่างๆ ในเกม
         player.update(game_areas)
         if current_boss:
             current_boss.update(game_areas, player)
+            
+        for m in current_monsters:
+            m_was_alive = m.is_alive
+            m.update(game_areas, player)
+            # ระบบดรอปขวดเลือดเมื่อมอนสเตอร์ตาย (ข้อ 4)
+            if m_was_alive and not m.is_alive:
+                import random
+                if random.random() < 0.5: # โอกาสดรอป 50%
+                    health_potions.append(pygame.Rect(m.rect.centerx, m.rect.bottom - 20, 20, 20))
+
+        # ตรวจสอบการเก็บขวดเลือด
+        for potion in health_potions[:]:
+            if player.rect.colliderect(potion):
+                player.heal(30) # เพิ่มเลือด 30 หน่วย
+                health_potions.remove(potion)
+                try:
+                    if os.path.exists("assets/sound/Inventory_Open_01.wav"):
+                        pygame.mixer.Sound("assets/sound/Inventory_Open_01.wav").play()
+                except:
+                    pass
 
         old_scene = current_scene
 
     # การเปลี่ยนฉาก (ทะลุขวา) ไปฉากถัดไป
     if player.rect.right >= 820:
         if current_scene == 1:
-            current_scene = 2
-            bg, game_areas = load_scene(current_scene)
-            player._rect.x = 10 
+            change_scene(2, player_new_x=10)
         elif current_scene == 2:
-            current_scene = 3
-            bg, game_areas = load_scene(current_scene)
-            player._rect.x = 10 
+            change_scene(3, player_new_x=10)
         elif current_scene == 3:
-            current_scene = 4
-            bg, game_areas = load_scene(current_scene)
-            player._rect.x = 10
+            change_scene(4, player_new_x=10)
             
-        # เดินย้อนกลับเปลี่ยนฉาก (ทะลุซ้าย)
-        elif player.rect.left <= 0:
-            if current_scene == 2:
-                current_scene = 1
-                bg, game_areas = load_scene(current_scene)
-                player._rect.right = 790 
-            elif current_scene == 3:
-                current_scene = 2
-                bg, game_areas = load_scene(current_scene)
-                player._rect.right = 790
-            elif current_scene == 4:
-                current_scene = 3
-                bg, game_areas = load_scene(current_scene)
-                player._rect.right = 790
+    # เดินย้อนกลับเปลี่ยนฉาก (ทะลุซ้าย)
+    elif player.rect.left <= 0:
+        if current_scene == 2:
+            change_scene(1, player_new_right=790)
+        elif current_scene == 3:
+            change_scene(2, player_new_right=790)
+        if current_scene == 4:
+            change_scene(3, player_new_right=790)
 
-        # สร้าง Boss เมื่อเข้าสู่ฉาก 4 
-        if current_scene != old_scene and current_scene == 4:
-            if current_boss is None or not current_boss.is_alive:
-                current_boss = MinotaurBoss(550, 0) # เกิดหล่นลงมาจากฟ้า
-                current_boss_ui = BossUI(current_boss)
+    # สร้าง Boss เมื่อเข้าสู่ฉาก 4 
+    if current_scene != old_scene and current_scene == 4:
+        if current_boss is None or not current_boss.is_alive:
+            from boss import MinotaurBoss, BossUI
+            current_boss = MinotaurBoss(550, 0) # เกิดหล่นลงมาจากฟ้า
+            current_boss_ui = BossUI(current_boss)
+
+    # สร้างมอนสเตอร์ตัวอื่นๆ ตามฉากต่างๆ 
+    if current_scene != old_scene and current_scene == 3:
+        if not any(m.is_alive for m in current_monsters):
+            from monster import Necromancer
+            # สร้าง Necromancer มาโผล่ที่ฉาก 3
+            current_monsters = [Necromancer(600, 300)]
 
     # 4. วาดทุกอย่างลงบนหน้าจอ (เรียงลำดับจากหลังมาหน้า)
     # วาดฉากหลัง
@@ -303,6 +420,15 @@ while running:
     # วาดพื้นที่ทั้งหมด โดยใช้หลักการ Polymorphism เรียก method draw ทีเดียว
     for area in game_areas:
         area.draw(screen)
+
+    # วาดมอนสเตอร์ปกติทั่วๆ ไป (Polymorphism: วาดด้วย pattern เดียวกัน)
+    for m in current_monsters:
+        m.draw(screen)
+
+    # วาดขวดเลือด (ข้อ 4)
+    for potion in health_potions:
+        pygame.draw.rect(screen, (255, 0, 0), potion, border_radius=5) # ขวดสีแดง
+        pygame.draw.rect(screen, (255, 255, 255), potion, 1, border_radius=5) # ขอบสีขาว
 
     # วาดตัวละครผู้เล่น
     player.draw(screen)

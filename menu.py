@@ -1,5 +1,19 @@
 import pygame
+import os
 
+try:
+    pygame.mixer.init()
+    if os.path.exists("assets/sound/Menu Selection Click.wav"):
+        CLICK_SOUND = pygame.mixer.Sound("assets/sound/Menu Selection Click.wav")
+    else:
+        CLICK_SOUND = None
+except:
+    CLICK_SOUND = None
+
+def play_click_sound():
+    if CLICK_SOUND:
+        CLICK_SOUND.play()
+        
 # =====================================================================
 # คลาสสำหรับจัดการเมนูหลัก (Single Responsibility Principle)
 # =====================================================================
@@ -32,14 +46,17 @@ class MainMenu:
 
             # ตรวจสอบการคลิกปุ่ม Play 
             if self.play_btn_rect.collidepoint(event.pos) and self.name_text.strip() != "":
+                play_click_sound()
                 return "play", self.name_text.strip()
                 
             # ตรวจสอบการคลิกปุ่ม Settings
             if self.settings_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 return "settings", None
 
             # ตรวจสอบการคลิกปุ่ม Quit
             if self.quit_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 return "quit", None
 
         # รองรับการพิมพ์ชื่อเมื่อกล่องรับชื่อแอคทีฟขึ้นมา
@@ -56,7 +73,7 @@ class MainMenu:
         screen.fill(self.bg_color)
         
         # ชื่อเกม
-        title_surf = self.large_font.render("MY GAME", True, (255, 215, 0))
+        title_surf = self.large_font.render("Jao Ting nong", True, (255, 215, 0))
         title_rect = title_surf.get_rect(center=(self.width//2, 100))
         screen.blit(title_surf, title_rect)
         
@@ -117,14 +134,19 @@ class SettingsMenu:
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.back_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 return "back"
             if self.fps30_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 self.fps = 30
             if self.fps60_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 self.fps = 60
             if self.sound_on_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 self.sound_on = True
             if self.sound_off_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 self.sound_on = False
         return None
         
@@ -185,10 +207,13 @@ class PauseMenu:
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.resume_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 return "resume"
             if self.settings_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 return "settings"
             if self.quit_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 return "quit"
         return None
         
@@ -237,8 +262,10 @@ class GameOverMenu:
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.play_again_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 return "play_again"
             if self.quit_btn_rect.collidepoint(event.pos):
+                play_click_sound()
                 return "quit"
         return None
 

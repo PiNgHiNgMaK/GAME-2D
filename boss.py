@@ -66,11 +66,11 @@ class MinotaurBoss(Enemy):
         super().__init__(x, y, speed=1, hp=300, name="Minotaur")
         
         # นำเข้า Sprite
-        self._sprite_idle = pygame.image.load("Minotaur_1/Idle.png").convert_alpha()
-        self._sprite_walk = pygame.image.load("Minotaur_1/Walk.png").convert_alpha()
-        self._sprite_attack = pygame.image.load("Minotaur_1/Attack.png").convert_alpha()
-        self._sprite_hurt = pygame.image.load("Minotaur_1/Hurt.png").convert_alpha()
-        self._sprite_dead = pygame.image.load("Minotaur_1/Dead.png").convert_alpha()
+        self._sprite_idle = pygame.image.load("assets/boss/Minotaur_1/Idle.png").convert_alpha()
+        self._sprite_walk = pygame.image.load("assets/boss/Minotaur_1/Walk.png").convert_alpha()
+        self._sprite_attack = pygame.image.load("assets/boss/Minotaur_1/Attack.png").convert_alpha()
+        self._sprite_hurt = pygame.image.load("assets/boss/Minotaur_1/Hurt.png").convert_alpha()
+        self._sprite_dead = pygame.image.load("assets/boss/Minotaur_1/Dead.png").convert_alpha()
         
         self._action = "idle" # "idle", "walk", "attack", "dead"
         self._current_frame = 0
@@ -82,6 +82,27 @@ class MinotaurBoss(Enemy):
         self._detect_range = 350 # ระยะมองเห็นตัวเล่น
         self._attack_range = 100  # ระยะที่เริ่มโจมตี
         self._facing_right = False
+
+        # เล่นเสียงตอนโผล่ออกมา
+        try:
+            import os
+            if os.path.exists("assets/sound/1.mp3"):
+                self._spawn_sound = pygame.mixer.Sound("assets/sound/1.mp3")
+                self._spawn_sound.set_volume(0.8)
+                self._spawn_sound.play()
+        except:
+            pass
+
+        # โหลดเสียงตอนตาย
+        try:
+            import os
+            if os.path.exists("assets/sound/2.mp3"):
+                self._death_sound = pygame.mixer.Sound("assets/sound/2.mp3")
+                self._death_sound.set_volume(0.8)
+            else:
+                self._death_sound = None
+        except:
+            self._death_sound = None
 
     # =====================================================================
     # 4. Polymorphism (พหุสัณฐาน)
@@ -95,6 +116,8 @@ class MinotaurBoss(Enemy):
                 self._action = "dead"
                 self._current_frame = 0
                 self._animation_timer = 0
+                if hasattr(self, '_death_sound') and self._death_sound:
+                    self._death_sound.play()
             else:
                 self._action = "hurt"
                 self._current_frame = 0
@@ -229,7 +252,8 @@ class MinotaurBoss(Enemy):
             frame_image = pygame.transform.flip(frame_image, True, False)
             
         image_rect = frame_image.get_rect()
-        image_rect.midbottom = self._rect.midbottom
+        # วางรูปบอสให้เหยียบติดพื้น
+        image_rect.midbottom = (self._rect.midbottom[0], self._rect.midbottom[1] + 15)
         
         screen.blit(frame_image, image_rect)
 

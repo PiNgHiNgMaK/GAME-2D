@@ -10,6 +10,6 @@ def check(path):
     except Exception as e:
         print(path, 'Error:', e)
 
-check("Knight_1/Defend.png")
-check("Knight_1/Protect.png")
+check("assets/player/Knight_1/Defend.png")
+check("assets/player/Knight_1/Protect.png")
 sys.exit(0)

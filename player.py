@@ -51,16 +51,62 @@ class Player(Character):
         # Load and set up sprite sheet
         # สมมติเราใช้ Idle.png และ Walk.png เป็นหลัก ตัวอย่างนี้ใช้ Idle สำหรับตอนยืน และ Walk สำหรับเดิน
         # โหลดภาพและตัดพื้นหลังที่ติดมา (colorkey) ดำ หรือปรับปรุงให้เข้ากับภาพ
-        self._sprite_idle = pygame.image.load("Knight_1/Idle.png").convert_alpha()
-        self._sprite_walk = pygame.image.load("Knight_1/Walk.png").convert_alpha()
-        self._sprite_run = pygame.image.load("Knight_1/Run.png").convert_alpha()
-        self._sprite_attack = pygame.image.load("Knight_1/Attack 1.png").convert_alpha()
-        self._sprite_attack2 = pygame.image.load("Knight_1/Attack 3.png").convert_alpha()
-        self._sprite_hurt = pygame.image.load("Knight_1/Hurt.png").convert_alpha()
+        self._sprite_idle = pygame.image.load("assets/player/Knight_1/Idle.png").convert_alpha()
+        self._sprite_walk = pygame.image.load("assets/player/Knight_1/Walk.png").convert_alpha()
+        self._sprite_run = pygame.image.load("assets/player/Knight_1/Run.png").convert_alpha()
+        self._sprite_attack = pygame.image.load("assets/player/Knight_1/Attack 1.png").convert_alpha()
+        self._sprite_attack2 = pygame.image.load("assets/player/Knight_1/Attack 3.png").convert_alpha()
+        self._sprite_hurt = pygame.image.load("assets/player/Knight_1/Hurt.png").convert_alpha()
         
         # โหลด Sprite สำหรับการป้องกัน
-        self._sprite_defend = pygame.image.load("Knight_1/Protect.png").convert_alpha()
+        self._sprite_defend = pygame.image.load("assets/player/Knight_1/Protect.png").convert_alpha()
         
+        # โหลดเสียงโจมตี
+        try:
+            import os
+            if os.path.exists("assets/sound/alexis_gaming_cam-epee-342933.mp3"):
+                self._attack_sound = pygame.mixer.Sound("assets/sound/alexis_gaming_cam-epee-342933.mp3")
+                self._attack_sound.set_volume(0.8)
+            else:
+                self._attack_sound = None
+        except:
+            self._attack_sound = None
+
+        # โหลดเสียงเดิน/วิ่ง
+        try:
+            import os
+            if os.path.exists("assets/sound/770083__vrymaa__footsteps-knight-team-walk-run-castle-hall.wav"):
+                self._footstep_sound = pygame.mixer.Sound("assets/sound/770083__vrymaa__footsteps-knight-team-walk-run-castle-hall.wav")
+                self._footstep_sound.set_volume(0.5)
+            else:
+                self._footstep_sound = None
+        except:
+            self._footstep_sound = None
+            
+        self._is_footstep_playing = False
+
+        # โหลดเสียงตอนตาย
+        try:
+            import os
+            if os.path.exists("assets/sound/3.mp3"):
+                self._death_sound = pygame.mixer.Sound("assets/sound/3.mp3")
+                self._death_sound.set_volume(0.8)
+            else:
+                self._death_sound = None
+        except:
+            self._death_sound = None
+
+        # โหลดเสียงป้องกัน
+        try:
+            import os
+            if os.path.exists("assets/sound/voicebosch-sword-block-the-ballad-of-blades-257226.mp3"):
+                self._block_sound = pygame.mixer.Sound("assets/sound/voicebosch-sword-block-the-ballad-of-blades-257226.mp3")
+                self._block_sound.set_volume(0.6)
+            else:
+                self._block_sound = None
+        except:
+            self._block_sound = None
+
         # กำหนดขนาดเฟรม (Idle กว้าง 512 มี 4 เฟรม = 128x128)
         self._frame_width = int(self._sprite_idle.get_width() / 4) # 128
         self._frame_height = self._sprite_idle.get_height() # 128
@@ -121,15 +167,26 @@ class Player(Character):
         if self._is_alive:
             # ถ้ายกโล่ป้องกันอยู่ จะลดดาเมจที่ได้รับ
             if self._is_defending:
-                amount = int(amount * 0.1) # เหลือดาเมจแค่ 20%
+                amount = int(amount * 0.1) # เหลือดาเมจแค่ 10%
+                if hasattr(self, '_block_sound') and self._block_sound:
+                    self._block_sound.play()
                 
             self._current_hp -= amount
             if self._current_hp <= 0:
                 self._current_hp = 0
                 self._is_alive = False
+                if hasattr(self, '_death_sound') and self._death_sound:
+                    self._death_sound.play()
             else:
                 self._is_hurt = True
                 self._current_frame = 0
+
+    def heal(self, amount):
+        """Method สำหรับเพิ่ม HP"""
+        if self._is_alive:
+            self._current_hp += amount
+            if self._current_hp > self._max_hp:
+                self._current_hp = self._max_hp
         
     def _apply_gravity(self, game_areas):
         """Method ภายใน (Encapsulated) สำหรับคำนวณแรงโน้มถ่วงและการชนพื้น"""
@@ -216,6 +273,10 @@ class Player(Character):
             self._current_frame = 0
             self._attack_cooldown = 40 # ระยะเวลาหน่วงระหว่างการโจมตีแต่ละครั้ง
             
+            # เล่นเสียงฟันดาบ
+            if hasattr(self, '_attack_sound') and self._attack_sound:
+                self._attack_sound.play()
+            
             # โจมตีโดนเป้าหมาย
             if target and getattr(target, 'is_alive', False):
                 distance = target.rect.centerx - self._rect.centerx
@@ -227,9 +288,23 @@ class Player(Character):
     def update(self, game_areas):
         """Override เพื่ออัปเดตฟิสิกส์และการขยับภาพ (Animation)"""
         if not self._is_alive:
+            if hasattr(self, '_footstep_sound') and self._footstep_sound and getattr(self, '_is_footstep_playing', False):
+                self._footstep_sound.stop()
+                self._is_footstep_playing = False
             return
         self._apply_gravity(game_areas)
         
+        # จัดการเสียงเดิน/วิ่ง
+        if hasattr(self, '_footstep_sound') and self._footstep_sound:
+            if (self._is_moving or self._is_running) and not self._is_jumping and not self._is_hurt and not self._is_attacking and not self._is_defending:
+                if not getattr(self, '_is_footstep_playing', False):
+                    self._footstep_sound.play(loops=-1)
+                    self._is_footstep_playing = True
+            else:
+                if getattr(self, '_is_footstep_playing', False):
+                    self._footstep_sound.stop()
+                    self._is_footstep_playing = False
+
         # ลด Cooldown
         if self._attack_cooldown > 0:
             self._attack_cooldown -= 1
@@ -356,8 +431,8 @@ class Player(Character):
         # สร้าง Rect สำหรับภาพที่วาด เพื่อให้มันมีศูนย์กลางตรงกันทั้งหันซ้ายและหันขวา
         image_rect = frame_image.get_rect()
         
-        # วางศูนย์กลางด้านล่างของภาพ (Midbottom) ให้อยู่จุดกึ่งกลางด้านล่างของตัวชน (Hitbox)
-        image_rect.midbottom = self._rect.midbottom
+        # ขยับภาพลงนิดนึงเพราะ sprite มีที่ว่างด้านล่างเพื่อให้เท้าเหยียบถึงพื้นพอดี
+        image_rect.midbottom = (self._rect.midbottom[0], self._rect.midbottom[1] + 20)
             
         # วาดลงจอโดยใช้ตำแหน่ง image_rect ที่จัดกึ่งกลางไว้แล้ว
         screen.blit(frame_image, image_rect)
