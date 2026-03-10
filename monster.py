@@ -68,6 +68,16 @@ class NecroticOrb(SpellEffect):
         if not self._is_active or not self._target:
             return
 
+        # ถ้า target ตายหรือหายไปแล้ว ให้ดับลูกไฟทันที (ป้องกันโจมตีข้ามฉาก)
+        if hasattr(self._target, 'is_alive') and not self._target.is_alive:
+            self._is_active = False
+            return
+
+        # ถ้าลูกไฟออกนอกหน้าจอ ให้ดับตัวเองทันที (ป้องกันโจมตีข้ามฉาก)
+        if self._x < -50 or self._x > 850 or self._y < -50 or self._y > 550:
+            self._is_active = False
+            return
+
         # คำนวณระยะห่างระหว่างลูกไฟและผู้เล่น
         dx = self._target.rect.centerx - self._x
         dy = self._target.rect.centery - self._y

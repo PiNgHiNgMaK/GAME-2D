@@ -1,9 +1,17 @@
 [project]
 name = "game2d"
 version = "0.1.0"
-description = "Add your description here"
+description = "2D Action Side-Scroller game built with Python and pygame-ce"
 readme = "README.md"
 requires-python = ">=3.14"
+keywords = ["game", "pygame", "2d", "action", "side-scroller"]
 dependencies = [
     "pygame-ce>=2.5.7",
 ]
+
+[project.scripts]
+game2d = "main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

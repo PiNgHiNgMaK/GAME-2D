@@ -226,8 +226,11 @@ class Player(Character):
         self._is_moving = False
         self._is_running = False
         
+        # ถ้า stamina หมด ทำได้แค่เดิน (ป้องกัน/วิ่ง/โจมตีไม่ได้)
+        stamina_exhausted = self._current_stamina <= 0
+
         # จัดการปุ่ม X หรือคลิกขวา (mouse_btns[2]) สำหรับยกโล่ป้องกัน
-        if keys[pygame.K_x] or mouse_btns[2]:
+        if not stamina_exhausted and (keys[pygame.K_x] or mouse_btns[2]):
             if not self._is_defending:
                 self._current_frame = 0 # เริ่มต้นเฟรมป้องกัน
             self._is_defending = True
@@ -238,13 +241,14 @@ class Player(Character):
             return # ไม่ให้เดินตอนกำลังยกโล่
         
         # ถือปุ่ม Shift ซ้ายเพื่อวิ่ง (Speed ห่างจากเดินนิดหน่อย)
-        if keys[pygame.K_LSHIFT] and self._current_stamina > 0:
+        # ถ้า stamina หมด วิ่งไม่ได้
+        if keys[pygame.K_LSHIFT] and self._current_stamina > 0 and not stamina_exhausted:
             current_speed = self._speed * 1.8
         else:
             current_speed = self._speed
         
         # เช็คปุ่มวิ่ง + ปุ่มเดิน (ซ้ายหรือขวา หรือ A หรือ D)
-        if keys[pygame.K_LSHIFT] and (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_a] or keys[pygame.K_d]) and self._current_stamina > 0:
+        if keys[pygame.K_LSHIFT] and (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_a] or keys[pygame.K_d]) and self._current_stamina > 0 and not stamina_exhausted:
             self._is_running = True
             # ลด stamina เมื่อวิ่ง
             self._current_stamina -= 0.5
