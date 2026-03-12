@@ -492,6 +492,12 @@ class EvilWizard(Enemy):
             flip=not self._facing_right
         )
         
+        # เอฟเฟกต์กระพริบสีขาวตอนโดนตี
+        if getattr(self, '_hit_flash_timer', 0) > 0:
+            flash_surf = pygame.Surface(frame_image.get_size(), pygame.SRCALPHA)
+            flash_surf.fill((255, 255, 255, 180)) # สีขาวสว่าง
+            frame_image.blit(flash_surf, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+
         image_rect = frame_image.get_rect()
         # ปรับ offset ให้เท้าแตะพื้นท้องพระโรง (Y=360) 
         # ปรับเพิ่มเป็น +230 เพื่อให้เท้าลงมาแตะพื้นพอดี (ไฟล์ Sprite มีพื้นที่ว่างด้านล่างเยอะมาก)
@@ -527,7 +533,7 @@ class NightBorne(Enemy):
         
         # Encapsulation: กำหนด Hitbox และระยะต่างๆ
         self._rect = pygame.Rect(x, y, 90, 100)
-        self._detect_range = 300 # ลดระยะการตรวจจับลงเพื่อไม่ให้วิ่งเข้าหาทันที
+        self._detect_range = 1000 # เพิ่มระยะตรวจจับเพื่อให้มองเห็นผู้เล่นจากนอกจอและเริ่มเดินเข้ามา
         self._attack_range = 80
         self._attack_cooldown = 0
         self._facing_right = False
@@ -575,6 +581,9 @@ class NightBorne(Enemy):
                     self._rect.bottom = area.rect.top
                     self._velocity_y = 0
                     
+        if getattr(self, '_hit_flash_timer', 0) > 0:
+            self._hit_flash_timer -= 1
+            
         self._update_animation(player)
 
     def _handle_ai(self, player):
@@ -583,12 +592,14 @@ class NightBorne(Enemy):
             distance = player.rect.centerx - self._rect.centerx
             self._facing_right = distance > 0
             abs_distance = abs(distance)
+            abs_y_distance = abs(player.rect.centery - self._rect.centery)
             
             if self._attack_cooldown > 0:
                 self._attack_cooldown -= 1
                 
             if self._action != "hurt":
-                if abs_distance <= self._attack_range and self._attack_cooldown == 0 and self._action != "attack":
+                # เช็คทั้งระยะ X และ Y (ไม่ให้ฟันจากนอกโลก)
+                if abs_distance <= self._attack_range and abs_y_distance < 100 and self._attack_cooldown == 0 and self._action != "attack":
                     self.attack(player)
                 elif abs_distance <= self._detect_range and self._action != "attack" and not player.rect.colliderect(self._rect):
                     self._action = "walk"

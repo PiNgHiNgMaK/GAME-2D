@@ -49,8 +49,8 @@ class Player(Character):
         self._name = ""
     
         # เพิ่มระบบ Stamina
-        self._max_stamina = 100
-        self._current_stamina = 100
+        self._max_stamina = 150
+        self._current_stamina = 150
         self._stamina_regen_rate = 0.5
         self._stamina_exhausted = False # สถานะเหนื่อยหอบ (วิ่งไม่ได้จนกว่าจะพัก)
         
@@ -139,6 +139,7 @@ class Player(Character):
         self._is_defending = False # สถานะการป้องกัน
         self._is_hurt = False # สถานะบาดเจ็บ
         self._attack_cooldown = 0
+        self._hit_flash_timer = 0
 
     @property
     def rect(self):
@@ -188,6 +189,8 @@ class Player(Character):
                     self._block_sound.play()
                 
             self._current_hp -= amount
+            self._hit_flash_timer = 15 # กระพริบ 15 เฟรม
+            
             if self._current_hp <= 0:
                 self._current_hp = 0
                 self._is_alive = False
@@ -335,6 +338,10 @@ class Player(Character):
                 self._footstep_sound.stop()
                 self._is_footstep_playing = False
             return
+            
+        if self._hit_flash_timer > 0:
+            self._hit_flash_timer -= 1
+            
         self._apply_gravity(game_areas)
         
         # จัดการเสียงเดิน/วิ่ง
@@ -414,27 +421,29 @@ class Player(Character):
                 if self._current_frame >= max_frames:
                     self._current_frame = 0
 
-    def draw(self, screen):
+    def draw(self, screen, show_ui=True):
         """Override เพื่อวาดภาพตัวละครลงจอ โดยตัดส่วนนึงมาจาก Sprite Sheet"""
         if not self._is_alive:
             return
             
-        # วาดชื่อผู้เล่นเหนือหลอดเลือดแบบบอส
-        if self._name != "":
-            if not hasattr(self, '_font'):
-                self._font = pygame.font.SysFont("Arial", 28, bold=True)
-            name_surf = self._font.render(self._name, True, (255, 255, 255))
-            screen.blit(name_surf, (20, 10))
+        # วาดส่วนติดต่อผู้ใช้ (UI) - HP/Stamina Bar
+        if show_ui:
+            # วาดชื่อผู้เล่นเหนือหลอดเลือดแบบบอส
+            if self._name != "":
+                if not hasattr(self, '_font'):
+                    self._font = pygame.font.SysFont("Arial", 28, bold=True)
+                name_surf = self._font.render(self._name, True, (255, 255, 255))
+                screen.blit(name_surf, (20, 10))
 
-        # วาดหลอดเลือด Player (มุมซ้ายบน เลื่อนลงเพื่อให้มีที่วางชื่อ)
-        pygame.draw.rect(screen, (50, 50, 50), (20, 40, 200, 15))
-        pygame.draw.rect(screen, (0, 200, 0), (20, 40, int(200 * (self._current_hp / self._max_hp)), 15))
-        pygame.draw.rect(screen, (255, 255, 255), (20, 40, 200, 15), 2)
-        
-        # วาดหลอด Stamina (ใต้หลอดเลือด)
-        pygame.draw.rect(screen, (50, 50, 50), (20, 60, 200, 10))
-        pygame.draw.rect(screen, (200, 200, 0), (20, 60, int(200 * (self._current_stamina / self._max_stamina)), 10))
-        pygame.draw.rect(screen, (255, 255, 255), (20, 60, 200, 10), 2)
+            # วาดหลอดเลือด Player (มุมซ้ายบน เลื่อนลงเพื่อให้มีที่วางชื่อ)
+            pygame.draw.rect(screen, (50, 50, 50), (20, 40, 200, 15))
+            pygame.draw.rect(screen, (0, 200, 0), (20, 40, int(200 * (self._current_hp / self._max_hp)), 15))
+            pygame.draw.rect(screen, (255, 255, 255), (20, 40, 200, 15), 2)
+            
+            # วาดหลอด Stamina (ใต้หลอดเลือด)
+            pygame.draw.rect(screen, (50, 50, 50), (20, 60, 200, 10))
+            pygame.draw.rect(screen, (200, 200, 0), (20, 60, int(200 * (self._current_stamina / self._max_stamina)), 10))
+            pygame.draw.rect(screen, (255, 255, 255), (20, 60, 200, 10), 2)
 
         # เลือก Sprite Sheet ตามสถานะการเดิน
         if self._is_hurt:

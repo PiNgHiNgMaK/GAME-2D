@@ -27,11 +27,11 @@ class DialogueManager:
         self.last_char_time = 0
         self.char_delay = 0.035 
 
-        # ตำแหน่งแถบข้อความ
+        # ตำแหน่งแถบข้อความ (เพิ่มความสูงเพื่อกันข้อความตก)
         self.box_width = 760
-        self.box_height = 110
+        self.box_height = 140
         self.box_x = (screen_width - self.box_width) // 2
-        self.box_y = screen_height - self.box_height - 40 
+        self.box_y = screen_height - self.box_height - 30 
         
         # ปุ่มปิด
         self.close_btn_rect = pygame.Rect(self.box_x + self.box_width - 110, self.box_y + self.box_height - 35, 100, 25)
@@ -140,4 +140,5 @@ STORY_DATA = {
     "SCENE_4_START": "The Cursed Guardian... at last, we meet.",
     "WIZARD_DEFEATED": "You can kill me... but you cannot kill the 'Past' that awaits in the next room!",
     "BOSS_DEFEATED": "Finally... the echoes are fading. My memory is returning...",
+    "ENDING_DAWN": "The mist fades with the fear... I remember now. I am not just a wanderer, but the Guardian of this sunlit realm."
 }

@@ -17,6 +17,7 @@ class Enemy(Character):
         self._name = name
         self._damage = 25
         self._is_alive = True
+        self._hit_flash_timer = 0 # สำหรับเอฟเฟกต์กระพริบตอนโดนตี
     
     @property
     def is_alive(self):
@@ -46,6 +47,7 @@ class Enemy(Character):
             if self._current_hp <= 0:
                 self._current_hp = 0
                 self._is_alive = False
+            self._hit_flash_timer = 10 # กระพริบ 10 เฟรม
 
     def handle_input(self, keys):
         """ศัตรูทำงานด้วย AI ไม่จำเป็นต้องใช้การควบคุมด้วยปุ่มแบบ Player"""
@@ -58,30 +60,34 @@ class Enemy(Character):
 
 class MinotaurBoss(Enemy):
     """
-    บอส Minotaur เฝ้าสมบัติ 
+    บอส Demon Slime จอมเขมือบจากอเวจี
     (Inheritance: รับคุณสมบัติจาก Enemy และ Character)
     """
     def __init__(self, x, y):
         # 3. Inheritance สืบทอดแอตทริบิวต์และเมธอดเริ่มต้น
-        super().__init__(x, y, speed=1, hp=300, name="Minotaur")
+        super().__init__(x, y, speed=2, hp=1000, name="Demon Slime")
         
-        # นำเข้า Sprite
-        self._sprite_idle = pygame.image.load("assets/boss/Minotaur_1/Idle.png").convert_alpha()
-        self._sprite_walk = pygame.image.load("assets/boss/Minotaur_1/Walk.png").convert_alpha()
-        self._sprite_attack = pygame.image.load("assets/boss/Minotaur_1/Attack.png").convert_alpha()
-        self._sprite_hurt = pygame.image.load("assets/boss/Minotaur_1/Hurt.png").convert_alpha()
-        self._sprite_dead = pygame.image.load("assets/boss/Minotaur_1/Dead.png").convert_alpha()
+        # โหลด Sprite แบบแยกโฟลเดอร์ตามโครงสร้างไฟล์ใหม่
+        self._animations = {
+            "idle": self._load_frames("01_demon_idle", "demon_idle", 6),
+            "walk": self._load_frames("02_demon_walk", "demon_walk", 12),
+            "attack": self._load_frames("03_demon_cleave", "demon_cleave", 15),
+            "hurt": self._load_frames("04_demon_take_hit", "demon_take_hit", 5),
+            "dead": self._load_frames("05_demon_death", "demon_death", 22)
+        }
         
-        self._action = "idle" # "idle", "walk", "attack", "dead"
+        self._action = "idle" 
         self._current_frame = 0
         self._animation_timer = 0
         self._attack_cooldown = 0
         
-        # ปรับขนาดกล่องชน Hitbox ให้เข้ากับตัวบอส
-        self._rect = pygame.Rect(x, y, 90, 110)
-        self._detect_range = 350 # ระยะมองเห็นตัวเล่น
-        self._attack_range = 100  # ระยะที่เริ่มโจมตี
+        # ปรับ Hitbox ให้เหมาะกับสไลม์ (ตัวกว้าง)
+        self._rect = pygame.Rect(x, y, 140, 100)
+        self._detect_range = 500
+        self._attack_range = 180 # ท่า Cleave มีระยะกว้าง
         self._facing_right = False
+        self._damage = 30
+        self._is_berserk = False # สถานะคลั่ง (Phase 2)
 
         # เล่นเสียงตอนโผล่ออกมา
         try:
@@ -104,10 +110,20 @@ class MinotaurBoss(Enemy):
         except:
             self._death_sound = None
 
+    def _load_frames(self, folder, prefix, count):
+        frames = []
+        base_path = f"assets/boss/boss_demon_slime_FREE_v1.0/individual sprites/{folder}/{prefix}_"
+        for i in range(1, count + 1):
+            try:
+                img = pygame.image.load(f"{base_path}{i}.png").convert_alpha()
+                frames.append(img)
+            except:
+                print(f"Error loading: {base_path}{i}.png")
+        return frames
+
     # =====================================================================
     # 4. Polymorphism (พหุสัณฐาน)
     # =====================================================================
-    # รูปแบบการทำงานอัปเดตสถานะของ Boss ต่างจาก Player 
     def take_damage(self, amount):
         if self._current_hp > 0:
             self._current_hp -= amount
@@ -119,29 +135,34 @@ class MinotaurBoss(Enemy):
                 if hasattr(self, '_death_sound') and self._death_sound:
                     self._death_sound.play()
             else:
-                self._action = "hurt"
-                self._current_frame = 0
-                self._animation_timer = 0
+                if self._action != "attack":
+                    self._action = "hurt"
+                    self._current_frame = 0
+                    self._animation_timer = 0
+                self._hit_flash_timer = 12
                 
     def update(self, game_areas, player=None):
         if not self._is_alive:
             return
             
-        # การทำงานของ AI บอส (เดินหา Player และโจมตี)
+        # เช็ค Phase 2 (Berserk) เมื่อเลือดต่ำกว่า 50%
+        if not self._is_berserk and self._current_hp < self._max_hp / 2:
+            self._is_berserk = True
+            self._speed *= 1.5 # วิ่งไวขึ้น
+            self._damage += 15 # ตีแรงขึ้น
+            
+        if self._hit_flash_timer > 0:
+            self._hit_flash_timer -= 1
+
         if self._action != "dead":
             if player and getattr(player, 'is_alive', True):
                 distance = player.rect.centerx - self._rect.centerx
-                
-                # หันหน้าหาผู้เล่น
                 self._facing_right = distance > 0
-                
                 abs_distance = abs(distance)
                 
-                # ลด Cooldown การโจมตี
                 if self._attack_cooldown > 0:
                     self._attack_cooldown -= 1
                     
-                # ตัดสินใจพฤติกรรม
                 if self._action != "hurt":
                     if abs_distance <= self._attack_range and self._attack_cooldown == 0 and self._action != "attack":
                         self.attack(player)
@@ -157,7 +178,7 @@ class MinotaurBoss(Enemy):
                 if self._action not in ("attack", "hurt"):
                     self._action = "idle"
 
-        # ระบบแรงโน้มถ่วงง่ายๆ
+        # ระบบแรงโน้มถ่วง
         self._velocity_y += 0.5
         self._rect.y += self._velocity_y
         for area in game_areas:
@@ -166,94 +187,80 @@ class MinotaurBoss(Enemy):
                     self._rect.bottom = area.rect.top
                     self._velocity_y = 0
                 
-        # อัพเดต Animation ของ Boss
-        if self._action == "dead":
-            sheet = self._sprite_dead
-        elif self._action == "hurt":
-            sheet = self._sprite_hurt
-        elif self._action == "attack":
-            sheet = self._sprite_attack
-        elif self._action == "walk":
-            sheet = self._sprite_walk
-        else:
-            sheet = self._sprite_idle
-            
-        # คำนวณจำนวนเฟรมโดยประมาณจากสัดส่วนภาพ
-        frames_count = sheet.get_width() // sheet.get_height()
-        max_frames = frames_count if frames_count > 0 else 4
+        # อัพเดต Animation
+        frames = self._animations.get(self._action, self._animations["idle"])
+        if not frames: return
         
         self._animation_timer += 1
-        if self._action == "attack":
-            speed_anim = 8
-        elif self._action == "hurt":
-            speed_anim = 5
-        else:
-            speed_anim = 6
         
-        if self._animation_timer >= speed_anim:
+        # ความเร็วอนิเมชันตามท่า
+        anim_speed = 6
+        if self._action == "attack": anim_speed = 4
+        if self._action == "hurt": anim_speed = 8
+        if self._action == "dead": anim_speed = 5
+
+        if self._animation_timer >= anim_speed:
             self._animation_timer = 0
-            
             if self._action == "dead":
-                if self._current_frame < max_frames - 1:
+                if self._current_frame < len(frames) - 1:
                     self._current_frame += 1
                 else:
-                    self._is_alive = False # ตายสนิทเมื่อรันอนิเมชันจบ
+                    self._is_alive = False
             elif self._action == "hurt":
                 self._current_frame += 1
-                if self._current_frame >= max_frames:
+                if self._current_frame >= len(frames):
                     self._current_frame = 0
-                    self._action = "idle" # โดนตีจบกลับมายืน
+                    self._action = "idle"
+            elif self._action == "attack":
+                self._current_frame += 1
+                if self._current_frame >= len(frames):
+                    self._current_frame = 0
+                    self._action = "idle"
+                    self._attack_cooldown = 100
             else:
                 self._current_frame += 1
-                if self._current_frame >= max_frames:
+                if self._current_frame >= len(frames):
                     self._current_frame = 0
-                    if self._action == "attack":
-                        self._action = "idle" # โจมตีจบกลับมายืน
-                        self._attack_cooldown = 90 # Cooldown ก่อนโจมตีครั้งต่อไป
         
     def attack(self, target):
         self._action = "attack"
         self._current_frame = 0 
-        # ทำดาเมจ (ให้ผู้เล่นมีฟังก์ชันรับดาเมจ)
         if hasattr(target, 'take_damage'):
             target.take_damage(self._damage)
 
-    # Polymorphism: การแสดงผลต่างจาก Player ตรงการดึง sprite และขนาดภาพ
     def draw(self, screen):
-        if not self._is_alive:
+        if not self._is_alive or self._action not in self._animations:
             return
             
-        if self._action == "dead":
-            current_sheet = self._sprite_dead
-        elif self._action == "hurt":
-            current_sheet = self._sprite_hurt
-        elif self._action == "attack":
-            current_sheet = self._sprite_attack
-        elif self._action == "walk":
-            current_sheet = self._sprite_walk
-        else:
-            current_sheet = self._sprite_idle
-            
-        frame_width = current_sheet.get_width() // (current_sheet.get_width() // current_sheet.get_height() or 1)
-        frame_height = current_sheet.get_height()
+        frames = self._animations[self._action]
+        if not frames: return
         
-        max_f = current_sheet.get_width() // frame_width
-        current_frame_clamped = self._current_frame if self._current_frame < max_f else 0
+        current_idx = min(self._current_frame, len(frames)-1)
+        frame_image = frames[current_idx]
             
-        frame_rect = pygame.Rect(current_frame_clamped * frame_width, 0, frame_width, frame_height)
-        frame_image = current_sheet.subsurface(frame_rect)
-            
-        # ขยายร่างบอสให้ตัวใหญ่สมจริงตามฉาก
-        scale_size = 2.5
-        frame_image = pygame.transform.scale(frame_image, (int(frame_width * scale_size), int(frame_height * scale_size)))
-        frame_image.set_colorkey((0, 0, 0)) # โปร่งใส
+        # ปรับสเกล
+        scale = 1.8
+        if self._is_berserk: scale = 2.0 # ตัวใหญ่ขึ้นนิดนึงตอนคลั่ง
+        w, h = frame_image.get_size()
+        frame_image = pygame.transform.scale(frame_image, (int(w * scale), int(h * scale)))
         
-        if not self._facing_right:
+        # เอฟเฟกต์กระพริบสีขาวตอนโดนตี
+        if self._hit_flash_timer > 0:
+            flash_surf = pygame.Surface(frame_image.get_size(), pygame.SRCALPHA)
+            flash_surf.fill((255, 255, 255, 150)) # สีขาวกึ่งโปร่งใส
+            frame_image.blit(flash_surf, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+
+        # เอฟเฟกต์สีแดงถ้าคลั่ง (Phase 2)
+        if self._is_berserk:
+            red_tint = pygame.Surface(frame_image.get_size(), pygame.SRCALPHA)
+            red_tint.fill((100, 0, 0, 0)) # เน้นสีแดง
+            frame_image.blit(red_tint, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+
+        if self._facing_right:
             frame_image = pygame.transform.flip(frame_image, True, False)
             
         image_rect = frame_image.get_rect()
-        # วางรูปบอสให้เหยียบติดพื้น
-        image_rect.midbottom = (self._rect.midbottom[0], self._rect.midbottom[1] + 15)
+        image_rect.midbottom = (self._rect.midbottom[0], self._rect.midbottom[1] + 10)
         
         screen.blit(frame_image, image_rect)
 
