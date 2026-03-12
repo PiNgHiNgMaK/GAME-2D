@@ -9,11 +9,11 @@ from boss import Enemy
 class SpriteManager:
     """Class ทำหน้าที่จัดการโหลดและตัดแบ่งภาพ Sprite Sheet"""
     def __init__(self, sheet_path, cols=1, rows=1):
+        # โหลดภาพและบังคับใช้ Alpha Channel (โปร่งใส) เสมอ
         self._sheet = pygame.image.load(sheet_path).convert_alpha()
         self._cols = cols
-        self._rows = rows
         self._frame_width = self._sheet.get_width() // cols
-        self._frame_height = self._sheet.get_height() // rows
+        self._frame_height = self._sheet.get_height() // rows 
         
     def get_frame(self, row, col, scale=1.0, flip=False):
         """ดึงเฟรมแบบปลอดภัย ป้องกัน Index out of range"""
@@ -29,7 +29,6 @@ class SpriteManager:
         if scale != 1.0:
             image = pygame.transform.scale(image, (int(self._frame_width * scale), int(self._frame_height * scale)))
             
-        image.set_colorkey((0, 0, 0)) # สีดำ = โปร่งใส
         if flip:
             image = pygame.transform.flip(image, True, False)
         return image
@@ -116,6 +115,13 @@ class SpatialMagicAttack(IAttackStrategy):
         # ฝากลูกแก้วให้ Necromancer เอาไปเรนเดอร์เอง (Encapsulation)
         if hasattr(attacker, 'add_effect'):
             attacker.add_effect(orb)
+
+class MeleeComboAttack(IAttackStrategy):
+    """กลยุทธ์โจมตีประชิดแบบรุนแรง (Strategy Pattern)"""
+    def execute_attack(self, attacker, target):
+        if target and hasattr(target, 'take_damage'):
+            # ดาเมจจะถูกคำนวณในจังหวะเฟรมที่ดาบฟันลงมาจริงใน update_animation
+            pass
 
 # =====================================================================
 # 3. Inheritance (สืบทอดจาก Enemy/Character)
@@ -286,3 +292,378 @@ class Necromancer(Enemy):
             hp_ratio = self._current_hp / self._max_hp
             pygame.draw.rect(screen, (50, 50, 50), (self._rect.centerx - 20, self._rect.top - 15, 40, 5))
             pygame.draw.rect(screen, (200, 0, 0), (self._rect.centerx - 20, self._rect.top - 15, int(40 * hp_ratio), 5))
+
+# =====================================================================
+# Evil Wizard 2 Implementation
+# =====================================================================
+class DarkFireball(SpellEffect):
+    """ลูกไฟสีม่วงดำสำหรับ Evil Wizard"""
+    def __init__(self, x, y, damage, target):
+        super().__init__(x, y, damage, target)
+        self._speed = 6
+        self._radius = 10
+        self._color = (75, 0, 130) # Indigo dark
+
+    def update(self):
+        if not self._is_active or not self._target: return
+        if hasattr(self._target, 'is_alive') and not self._target.is_alive:
+            self._is_active = False
+            return
+            
+        dx = self._target.rect.centerx - self._x
+        dy = (self._target.rect.centery - 20) - self._y
+        dist = (dx**2 + dy**2)**0.5
+
+        if dist < 15:
+            if hasattr(self._target, 'take_damage'):
+                self._target.take_damage(self._damage)
+            self._is_active = False
+            return
+
+        self._x += (dx / dist) * self._speed
+        self._y += (dy / dist) * self._speed
+
+    def draw(self, screen):
+        if self._is_active:
+            # วาดลูกไฟร่ายเวทย์
+            pygame.draw.circle(screen, self._color, (int(self._x), int(self._y)), self._radius)
+            pygame.draw.circle(screen, (150, 0, 255), (int(self._x), int(self._y)), self._radius + 3, 2)
+
+class EvilWizardAttack(IAttackStrategy):
+    """การโจมตีด้วยเวทมนตร์มืดของ Evil Wizard"""
+    def execute_attack(self, attacker, target):
+        ball = DarkFireball(attacker.rect.centerx, attacker.rect.centery - 30, attacker._damage, target)
+        if hasattr(attacker, 'add_effect'):
+            attacker.add_effect(ball)
+
+class EvilWizard(Enemy):
+    """
+    Evil Wizard 2: มอนสเตอร์จอมเวทย์ในฉากที่ 3
+    ใช้ Sprite แยกไฟล์ (Idle, Run, Attack1, Take hit, Death)
+    """
+    def __init__(self, x, y):
+        super().__init__(x, y, speed=1.8, hp=350, name="Evil Wizard")
+        self._damage = 25
+        self._attack_strategy = EvilWizardAttack()
+        
+        path = "assets/mons/EVil Wizard 2/Sprites/"
+        # แบ่ง SpriteManager แยกตามไฟล์แอคชั่น
+        self._sprites = {
+            "idle": SpriteManager(path + "Idle.png", cols=8, rows=1),
+            "walk": SpriteManager(path + "Run.png", cols=8, rows=1),
+            "attack": SpriteManager(path + "Attack1.png", cols=8, rows=1),
+            "hurt": SpriteManager(path + "Take hit.png", cols=3, rows=1),
+            "dead": SpriteManager(path + "Death.png", cols=7, rows=1)
+        }
+        
+        self._rect = pygame.Rect(x, y, 90, 100)
+        self._detect_range = 400
+        self._attack_range = 250
+        self._attack_cooldown = 0
+        self._facing_right = False
+        
+        self._action = "idle"
+        self._current_frame = 0
+        self._animation_timer = 0
+        self._active_effects = []
+
+    def add_effect(self, effect):
+        self._active_effects.append(effect)
+
+    def take_damage(self, amount):
+        if self._current_hp > 0 and self._action != "dead":
+            self._current_hp -= amount
+            if self._current_hp <= 0:
+                self._current_hp = 0
+                self._action = "dead"
+            else:
+                self._action = "hurt"
+            self._current_frame = 0
+            self._animation_timer = 0
+
+    def attack(self, target):
+        self._action = "attack"
+        self._current_frame = 0
+        self._animation_timer = 0
+        self._attack_cooldown = 180 # เพิ่ม Cooldown เป็น 3 วินาที (จากเดิม 90) ให้ตีช้าลง
+        # ย้ายการเสกบอลไปไว้ใน _update_animation เพื่อให้สัมพันธ์กับท่าทาง
+
+    def update(self, game_areas, player=None):
+        for effect in self._active_effects:
+            effect.update()
+        self._active_effects = [e for e in self._active_effects if e.is_active]
+            
+        if not self._is_alive: return
+            
+        if self._action != "dead":
+            self._handle_ai(player)
+            
+        # Physics
+        self._velocity_y += 0.5
+        self._rect.y += self._velocity_y
+        for area in game_areas:
+            if area.is_walkable() and self._rect.colliderect(area.rect):
+                if self._velocity_y > 0:
+                    self._rect.bottom = area.rect.top
+                    self._velocity_y = 0
+                    
+        self._update_animation()
+
+    def _handle_ai(self, player):
+        if player and player.is_alive:
+            distance = player.rect.centerx - self._rect.centerx
+            self._facing_right = distance > 0
+            abs_dist = abs(distance)
+            
+            if self._attack_cooldown > 0:
+                self._attack_cooldown -= 1
+                
+            if self._action != "hurt" and self._action != "attack":
+                if abs_dist <= self._attack_range and self._attack_cooldown == 0:
+                    self.attack(player)
+                elif abs_dist <= self._detect_range:
+                    self._action = "walk"
+                    self._rect.x += self._speed if self._facing_right else -self._speed
+                else:
+                    self._action = "idle"
+            
+            # เก็บอ้างอิงผู้เล่นไว้ใช้ในการเสกบอลตามเฟรมอนิเมชั่น
+            self._player_ref = player
+        else:
+            if self._action not in ("attack", "hurt", "dead"):
+                self._action = "idle"
+            self._player_ref = None
+
+    def _update_animation(self):
+        self._animation_timer += 1
+        
+        # กำหนดจำนวนเฟรมตามชื่อไฟล์
+        frame_counts = {
+            "idle": 8,
+            "walk": 8,
+            "attack": 8,
+            "hurt": 3,
+            "dead": 7
+        }
+        
+        max_frames = frame_counts.get(self._action, 8)
+        
+        # ปรับความเร็วอนิเมชั่นให้ดูเนียนและไม่ไวเกินไป
+        anim_speeds = {
+            "idle": 10,
+            "walk": 7,
+            "attack": 12, # ท่าตีช้าหน่อยเพื่อให้หลบง่าย
+            "hurt": 6,
+            "dead": 10
+        }
+        speed_anim = anim_speeds.get(self._action, 8)
+        
+        if self._animation_timer >= speed_anim:
+            self._animation_timer = 0
+            self._current_frame += 1
+            
+            # เสกบอลตอนเฟรมที่ 4 (จังหวะชูไม้เท้าพอดี)
+            if self._action == "attack" and self._current_frame == 4:
+                if hasattr(self, '_player_ref') and self._player_ref:
+                    self._attack_strategy.execute_attack(self, self._player_ref)
+
+            if self._current_frame >= max_frames:
+                if self._action == "dead":
+                    self._current_frame = max_frames - 1
+                    self._is_alive = False
+                elif self._action in ("hurt", "attack"):
+                    self._current_frame = 0
+                    self._action = "idle"
+                else:
+                    self._current_frame = 0
+
+    def draw(self, screen):
+        for effect in self._active_effects:
+            effect.draw(screen)
+            
+        if not self._is_alive: return
+            
+        # ดึง SpriteManager ตาม action ปัจจุบัน
+        manager = self._sprites.get(self._action, self._sprites["idle"])
+        frame_image = manager.get_frame(
+            row=0, # ไฟล์ละ 1 แถวอยู่แล้ว
+            col=self._current_frame,
+            scale=2.5,
+            flip=not self._facing_right
+        )
+        
+        image_rect = frame_image.get_rect()
+        # ปรับ offset ให้เท้าแตะพื้นท้องพระโรง (Y=360) 
+        # ปรับเพิ่มเป็น +230 เพื่อให้เท้าลงมาแตะพื้นพอดี (ไฟล์ Sprite มีพื้นที่ว่างด้านล่างเยอะมาก)
+        image_rect.midbottom = (self._rect.centerx, self._rect.bottom + 230)
+        
+        screen.blit(frame_image, image_rect)
+
+        # HP Bar
+        if self._current_hp < self._max_hp:
+            hp_ratio = self._current_hp / self._max_hp
+            pygame.draw.rect(screen, (40, 40, 40), (self._rect.centerx - 25, self._rect.top - 15, 50, 5))
+            pygame.draw.rect(screen, (220, 0, 50), (self._rect.centerx - 25, self._rect.top - 15, int(50 * hp_ratio), 5))
+
+# =====================================================================
+# 7. Enhanced Monster Implementation (SOLID/OOP)
+# =====================================================================
+class NightBorne(Enemy):
+    """
+    มอนสเตอร์ NightBorne จากป่ามรณะ (Inheritance จาก Enemy)
+    สอดคล้องกับ 4 เสาหลัก OOP และหลักการ SOLID
+    """
+    def __init__(self, x, y):
+        # Inheritance & Encapsulation: ตั้งค่าสถานะเริ่มต้น
+        super().__init__(x, y, speed=2.5, hp=250, name="NightBorne")
+        
+        # Dependency Inversion: พึ่งพานามธรรม IAttackStrategy
+        self._attack_strategy = MeleeComboAttack()
+        self._damage = 20
+        
+        # Single Responsibility: SpriteManager รับหน้าที่ตัดภาพ
+        # NightBorne.png: 23 cols, 5 rows
+        self._sprite_manager = SpriteManager("assets/mons/NightBorne/NightBorne.png", cols=23, rows=5)
+        
+        # Encapsulation: กำหนด Hitbox และระยะต่างๆ
+        self._rect = pygame.Rect(x, y, 90, 100)
+        self._detect_range = 300 # ลดระยะการตรวจจับลงเพื่อไม่ให้วิ่งเข้าหาทันที
+        self._attack_range = 80
+        self._attack_cooldown = 0
+        self._facing_right = False
+        
+        self._action = "idle" 
+        self._current_frame = 0
+        self._animation_timer = 0
+        self._current_row = 0
+        self._is_exploding = False # พิเศษสำหรับอนิเมชั่นตาย
+
+    # Polymorphism: ปรับแต่งการรับดาเมจ
+    def take_damage(self, amount):
+        if self._current_hp > 0 and self._action != "dead":
+            self._current_hp -= amount
+            if self._current_hp <= 0:
+                self._current_hp = 0
+                self._action = "dead"
+                self._current_frame = 0
+                self._animation_timer = 0
+            else:
+                self._action = "hurt"
+                self._current_frame = 0
+                self._animation_timer = 0
+                
+    def attack(self, target):
+        self._action = "attack"
+        self._current_frame = 0
+        self._attack_cooldown = 120 # โจมตีหนักต้องพักนาน
+        self._attack_strategy.execute_attack(self, target)
+
+    # Polymorphism: จัดการ AI และ Physics ของ NightBorne
+    def update(self, game_areas, player=None):
+        if not self._is_alive:
+            return
+            
+        if self._action != "dead":
+            self._handle_ai(player)
+            
+        # Gravity & Ground Collision
+        self._velocity_y += 0.5
+        self._rect.y += self._velocity_y
+        for area in game_areas:
+            if area.is_walkable() and self._rect.colliderect(area.rect):
+                if self._velocity_y > 0 and self._rect.bottom <= area.rect.bottom:
+                    self._rect.bottom = area.rect.top
+                    self._velocity_y = 0
+                    
+        self._update_animation(player)
+
+    def _handle_ai(self, player):
+        """จัดการการตัดสินใจ (Simple FSM)"""
+        if player and getattr(player, 'is_alive', True):
+            distance = player.rect.centerx - self._rect.centerx
+            self._facing_right = distance > 0
+            abs_distance = abs(distance)
+            
+            if self._attack_cooldown > 0:
+                self._attack_cooldown -= 1
+                
+            if self._action != "hurt":
+                if abs_distance <= self._attack_range and self._attack_cooldown == 0 and self._action != "attack":
+                    self.attack(player)
+                elif abs_distance <= self._detect_range and self._action != "attack" and not player.rect.colliderect(self._rect):
+                    self._action = "walk"
+                    self._rect.x += self._speed if self._facing_right else -self._speed
+                elif self._action != "attack":
+                    self._action = "idle"
+        else:
+            if self._action not in ("attack", "hurt"):
+                self._action = "idle"
+
+    def _update_animation(self, player=None):
+        """จัดการการสลับเฟรมภาพ (LSP)"""
+        self._animation_timer += 1
+        
+        # Mapping แอคชันกับ Row ใน Sprite Sheet
+        if self._action == "dead":
+            max_frames, speed_anim, row = 23, 4, 4
+        elif self._action == "hurt":
+            max_frames, speed_anim, row = 5, 6, 3
+        elif self._action == "attack":
+            max_frames, speed_anim, row = 12, 5, 2
+        elif self._action == "walk":
+            max_frames, speed_anim, row = 6, 5, 1
+        else: # idle
+            max_frames, speed_anim, row = 9, 7, 0
+            
+        if self._animation_timer >= speed_anim:
+            self._animation_timer = 0
+            self._current_row = row
+            
+            # จังหวะทำดาเมจจริง (เฟรมที่ 9 ของอนิเมชั่นโจมตี)
+            if self._action == "attack" and self._current_frame == 9 and player:
+                distance = abs(player.rect.centerx - self._rect.centerx)
+                if distance < self._attack_range + 20: # ดาบใหญ่ระยะยาวหน่อย
+                    player.take_damage(self._damage)
+
+            if self._action == "dead":
+                if self._current_frame < max_frames - 1:
+                    self._current_frame += 1
+                else:
+                    self._is_alive = False # สลายตัวเมื่ออนิเมชั่นระเบิดจบ
+            elif self._action == "hurt":
+                self._current_frame += 1
+                if self._current_frame >= max_frames:
+                    self._current_frame = 0
+                    self._action = "idle"
+            else:
+                self._current_frame += 1
+                if self._current_frame >= max_frames:
+                    self._current_frame = 0
+                    if self._action == "attack":
+                        self._action = "idle"
+
+    # Polymorphism: การแสดงผลเฉพาะตัว
+    def draw(self, screen):
+        if not self._is_alive:
+            return
+            
+        frame_image = self._sprite_manager.get_frame(
+            row=self._current_row, 
+            col=self._current_frame, 
+            scale=3.0, # NightBorne ตัวใหญ่กว่าปกตินิดนึง
+            flip=not self._facing_right
+        )
+        
+        image_rect = frame_image.get_rect()
+        # ปรับ offset ให้กดตัวลงมาลึกขึ้น (รูปมันมีที่ว่างล่างเยอะ) เพื่อให้ยืนระดับเดียวกับผู้เล่น
+        image_rect.midbottom = (self._rect.centerx, self._rect.bottom + 55)
+        
+        screen.blit(frame_image, image_rect)
+
+        # หลอดเลือด HP (Encapsulation)
+        if self._current_hp < self._max_hp:
+            hp_ratio = self._current_hp / self._max_hp
+            pygame.draw.rect(screen, (50, 50, 50), (self._rect.centerx - 30, self._rect.top - 20, 60, 6))
+            pygame.draw.rect(screen, (150, 0, 200), (self._rect.centerx - 30, self._rect.top - 20, int(60 * hp_ratio), 6))
+            pygame.draw.rect(screen, (255, 255, 255), (self._rect.centerx - 30, self._rect.top - 20, 60, 6), 1)
+

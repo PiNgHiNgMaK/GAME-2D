@@ -73,7 +73,7 @@ class MainMenu:
         screen.fill(self.bg_color)
         
         # ชื่อเกม
-        title_surf = self.large_font.render("Jao Ting nong", True, (255, 215, 0))
+        title_surf = self.large_font.render("The Echo of the Abyss", True, (255, 215, 0))
         title_rect = title_surf.get_rect(center=(self.width//2, 100))
         screen.blit(title_surf, title_rect)
         

@@ -52,6 +52,7 @@ class Player(Character):
         self._max_stamina = 100
         self._current_stamina = 100
         self._stamina_regen_rate = 0.5
+        self._stamina_exhausted = False # สถานะเหนื่อยหอบ (วิ่งไม่ได้จนกว่าจะพัก)
         
         # Load and set up sprite sheet
         # สมมติเราใช้ Idle.png และ Walk.png เป็นหลัก ตัวอย่างนี้ใช้ Idle สำหรับตอนยืน และ Walk สำหรับเดิน
@@ -163,6 +164,16 @@ class Player(Character):
     def name(self):
         return self._name
         
+    @property
+    def is_attacking(self):
+        """Getter สำหรับสถานะกำลังโจมตี"""
+        return self._is_attacking
+        
+    @property
+    def current_frame(self):
+        """Getter สำหรับเฟรมอนิเมชั่นปัจจุบัน"""
+        return self._current_frame
+        
     @name.setter
     def name(self, value):
         self._name = value
@@ -226,11 +237,16 @@ class Player(Character):
         self._is_moving = False
         self._is_running = False
         
-        # ถ้า stamina หมด ทำได้แค่เดิน (ป้องกัน/วิ่ง/โจมตีไม่ได้)
-        stamina_exhausted = self._current_stamina <= 0
+        # ระบบเหนื่อยหอบ: ถ้า Stamina หมด จะติดสถานะ exhausted
+        if self._current_stamina <= 0:
+            self._stamina_exhausted = True
+        
+        # จะหายเหนื่อยก็ต่อเมื่อ Stamina กลับมาถึงระดับหนึ่ง (เช่น 30%)
+        if self._stamina_exhausted and self._current_stamina >= 30:
+            self._stamina_exhausted = False
 
         # จัดการปุ่ม X หรือคลิกขวา (mouse_btns[2]) สำหรับยกโล่ป้องกัน
-        if not stamina_exhausted and (keys[pygame.K_x] or mouse_btns[2]):
+        if not self._stamina_exhausted and (keys[pygame.K_x] or mouse_btns[2]):
             if not self._is_defending:
                 self._current_frame = 0 # เริ่มต้นเฟรมป้องกัน
             self._is_defending = True
@@ -240,15 +256,15 @@ class Player(Character):
         if self._is_defending:
             return # ไม่ให้เดินตอนกำลังยกโล่
         
-        # ถือปุ่ม Shift ซ้ายเพื่อวิ่ง (Speed ห่างจากเดินนิดหน่อย)
-        # ถ้า stamina หมด วิ่งไม่ได้
-        if keys[pygame.K_LSHIFT] and self._current_stamina > 0 and not stamina_exhausted:
+        # ถือปุ่ม Shift ซ้ายเพื่อวิ่ง 
+        # ถ้าอยู่ในสถานะเหนื่อยหอบ (exhausted) จะวิ่งไม่ได้
+        if keys[pygame.K_LSHIFT] and not self._stamina_exhausted:
             current_speed = self._speed * 1.8
         else:
             current_speed = self._speed
         
-        # เช็คปุ่มวิ่ง + ปุ่มเดิน (ซ้ายหรือขวา หรือ A หรือ D)
-        if keys[pygame.K_LSHIFT] and (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_a] or keys[pygame.K_d]) and self._current_stamina > 0 and not stamina_exhausted:
+        # เช็คปุ่มวิ่ง + ปุ่มเดิน
+        if keys[pygame.K_LSHIFT] and (keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_a] or keys[pygame.K_d]) and not self._stamina_exhausted:
             self._is_running = True
             # ลด stamina เมื่อวิ่ง
             self._current_stamina -= 0.5
@@ -367,9 +383,9 @@ class Player(Character):
         elif self._is_attacking:
             animation_delay = 5 
         elif self._is_running:
-            animation_delay = 4 # สับขาไวขึ้นนิดนึงตอนวิ่ง
+            animation_delay = 3 # สับขาไวขึ้นตอนวิ่ง
         elif self._is_moving:
-            animation_delay = 2 
+            animation_delay = 6 # เดินปกติ slow life
         else:
             animation_delay = 10
             
