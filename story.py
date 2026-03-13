@@ -26,6 +26,15 @@ class DialogueManager:
         self.char_index = 0
         self.last_char_time = 0
         self.char_delay = 0.035 
+        
+        # เสียงพิมพ์ตัวอักษร
+        try:
+            import os
+            if os.path.exists("assets/sound/Menu Selection Click.wav"):
+                self.type_sound = pygame.mixer.Sound("assets/sound/Menu Selection Click.wav")
+                self.type_sound.set_volume(0.15) # เบาๆ พอประดับ
+            else: self.type_sound = None
+        except: self.type_sound = None
 
         # ตำแหน่งแถบข้อความ (เพิ่มความสูงเพื่อกันข้อความตก)
         self.box_width = 760
@@ -71,6 +80,11 @@ class DialogueManager:
                 self.display_text += self.active_message[self.char_index]
                 self.char_index += 1
                 self.last_char_time = time.time()
+                
+                # เล่นเสียงพิมพ์ (ทุกๆ 2 ตัวเพื่อความไม่หนวกหู)
+                if self.char_index % 2 == 0:
+                    if hasattr(self, 'type_sound') and self.type_sound:
+                        self.type_sound.play()
 
     def draw(self, screen):
         if not self.is_showing: return

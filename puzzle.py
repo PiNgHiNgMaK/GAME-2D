@@ -151,7 +151,7 @@ class DeflectorPuzzleManager:
                 else:
                     # ถ้าปัดไม่ทัน โดนดาเมจ
                     if dist_to_player < 40:
-                        player.take_damage(5)
+                        player.take_damage(20)
                         orb._is_active = False
 
             # การชนระหว่างลูกที่สะท้อนแล้วกับผลึก (ใช้ Rect เช็คจะแม่นกว่า)

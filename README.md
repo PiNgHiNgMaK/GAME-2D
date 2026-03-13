@@ -81,7 +81,7 @@ Game2d/
 ├── main.py          # ไฟล์หลัก — Game Loop และ Scene Management
 ├── player.py        # คลาส Player และระบบ Stamina / Combat
 ├── monster.py       # คลาส Necromancer (มอนสเตอร์)
-├── boss.py          # คลาส MinotaurBoss และ BossUI
+├── boss.py          # คลาส DemonSlimeBoss และ BossUI
 ├── menu.py          # ระบบ Menu ทั้งหมด (Main, Settings, Pause, GameOver)
 ├── background/      # ไฟล์รูปภาพพื้นหลังฉาก (bg-1.jpg ถึง bg-4.jpg)
 │   └── back_g.py    # คลาส background สำหรับวาดพื้นหลัง
