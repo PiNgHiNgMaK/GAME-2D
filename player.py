@@ -49,7 +49,7 @@ class Player(Character):
         self._current_hp = 100
         self._display_hp = 100.0 # หลอดเลือดเสมือนสำหรับอนิเมชั่นไหลนุ่มๆ
         self._is_alive = True
-        self._damage = 1000000000
+        self._damage = 200
         self._name = ""
     
         # เพิ่มระบบ Stamina

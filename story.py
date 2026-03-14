@@ -6,15 +6,22 @@ class DialogueManager:
         self.width = screen_width
         self.height = screen_height
         
-        # ลองโหลดฟอนต์หลายๆ แบบ
-        # ปรับฟอนต์ให้ดูดีขึ้น
-        thai_fonts = ["Segoe UI", "Tahoma", "Arial", "Verdana"]
+        # โหลดฟอนต์ Pixel Art 2D
+        # ใช้แนวทาง Retro 8-bit เพื่อเอกลักษณ์และความเก่าแก่
         self.font = None
-        for f in thai_fonts:
-            try:
-                self.font = pygame.font.SysFont(f, 26, bold=True)
-                if self.font: break
-            except: continue
+        try:
+            font_path = "assets/fonts/PressStart2P-Regular.ttf"
+            self.font = pygame.font.Font(font_path, 16)
+        except:
+            # สำรองในกรณีที่หาไฟล์ไม่เจอ
+            pixel_fonts = ["Courier New", "Consolas", "Fixedsys", "Terminal"]
+            for f in pixel_fonts:
+                try:
+                    self.font = pygame.font.SysFont(f, 22, bold=True)
+                    if self.font: break
+                except: continue
+            if not self.font:
+                self.font = pygame.font.Font(None, 26) # Fallback สุดท้าย
         
         self.active_message = ""
         self.display_text = ""
@@ -44,7 +51,10 @@ class DialogueManager:
         
         # ปุ่มปิด
         self.close_btn_rect = pygame.Rect(self.box_x + self.box_width - 110, self.box_y + self.box_height - 35, 100, 25)
-        self.small_font = pygame.font.SysFont("Arial", 14, bold=True)
+        try:
+            self.small_font = pygame.font.Font(font_path, 10)
+        except:
+            self.small_font = pygame.font.SysFont("Courier New", 14, bold=True)
         
     def show_message(self, text):
         if not text: return
@@ -118,11 +128,12 @@ class DialogueManager:
         y_offset = self.box_y + 20
         for line in lines:
             if not line.strip(): continue
-            line_surf = self.font.render(line.strip(), True, (255, 215, 0))
+            # ปิด Anti-aliasing (False) เพื่อให้เป็น Pixel Art ที่คมชัด
+            line_surf = self.font.render(line.strip(), False, (255, 215, 0))
             line_rect = line_surf.get_rect(centerx=self.box_x + self.box_width // 2, y=y_offset)
             
-            # Shadow
-            shadow_surf = self.font.render(line.strip(), True, (0, 0, 0))
+            # Shadow (Pixel Art)
+            shadow_surf = self.font.render(line.strip(), False, (0, 0, 0))
             screen.blit(shadow_surf, (line_rect.x + 2, line_rect.y + 2))
             # Main
             screen.blit(line_surf, line_rect)
@@ -138,12 +149,13 @@ class DialogueManager:
             pygame.draw.rect(screen, btn_color, self.close_btn_rect, border_radius=5)
             pygame.draw.rect(screen, (255, 255, 255), self.close_btn_rect, 1, border_radius=5)
             
-            btn_text = self.small_font.render("CLOSE [F]", True, (255, 255, 255))
+            # ปิด Anti-aliasing เพื่อคงความ pixel
+            btn_text = self.small_font.render("CLOSE [F]", False, (255, 255, 255))
             screen.blit(btn_text, btn_text.get_rect(center=self.close_btn_rect.center))
             
             # ชวนให้กดนิดนึง (กระพริบ)
             if int(time.time() * 2) % 2 == 0:
-                prompt = self.small_font.render("Press SPACE or F to continue...", True, (200, 200, 200))
+                prompt = self.small_font.render("Press SPACE or F to continue...", False, (200, 200, 200))
                 screen.blit(prompt, (self.box_x + 20, self.box_y + self.box_height - 25))
 
 # Story Data in English
