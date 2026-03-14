@@ -56,7 +56,7 @@ class Player(Character):
         # เพิ่มระบบ Stamina
         self._max_stamina = 150
         self._current_stamina = 150
-        self._stamina_regen_rate = 0.5
+        self._stamina_regen_rate = 1.0
         self._stamina_exhausted = False # สถานะเหนื่อยหอบ (วิ่งไม่ได้จนกว่าจะพัก)
         
         # Load and set up sprite sheet
