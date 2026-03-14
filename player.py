@@ -51,11 +51,12 @@ class Player(Character):
         self._is_alive = True
         self._damage = 200
         self._name = ""
+        self._font = None # สำหรับเก็บฟอนต์แบบ Pixel
     
         # เพิ่มระบบ Stamina
         self._max_stamina = 150
         self._current_stamina = 150
-        self._stamina_regen_rate = 0.5
+        self._stamina_regen_rate = 1
         self._stamina_exhausted = False # สถานะเหนื่อยหอบ (วิ่งไม่ได้จนกว่าจะพัก)
         
         # Load and set up sprite sheet
@@ -546,31 +547,64 @@ class Player(Character):
         # จัดการเฟรมและภาพ
         # วาดส่วนติดต่อผู้ใช้ (UI) - HP/Stamina Bar
         if show_ui:
-            # วาดชื่อผู้เล่นเหนือหลอดเลือดแบบบอส
+            # วาดชื่อผู้เล่นแบบอักษร Pixel
             if self._name != "":
-                if not hasattr(self, '_font'):
-                    self._font = pygame.font.SysFont("Arial", 28, bold=True)
-                name_surf = self._font.render(self._name, True, (255, 255, 255))
-                screen.blit(name_surf, (20, 10))
+                if not self._font:
+                    import os
+                    path = "assets/fonts/PressStart2P-Regular.ttf"
+                    if os.path.exists(path):
+                        self._font = pygame.font.Font(path, 14)
+                    else:
+                        self._font = pygame.font.SysFont("Courier New", 14, bold=True)
+                
+                if self._font:
+                    # Text Shadow
+                    name_shadow = self._font.render(self._name, False, (10, 5, 5))
+                    screen.blit(name_shadow, (22, 12))
+                    
+                    # Text Foreground (Parchment white)
+                    name_surf = self._font.render(self._name, False, (230, 220, 200))
+                    screen.blit(name_surf, (20, 10))
 
-            # วาดหลอดเลือด Player (มุมซ้ายบน เลื่อนลงเพื่อให้มีที่วางชื่อ)
+            # วาดหลอดเลือดและ Stamina แบบ Pixel Art
             hp_ratio = self._current_hp / self._max_hp
             display_hp_ratio = self._display_hp / self._max_hp # อัตราที่จะใช้วาดจริง
-            bar_width, bar_height = 200, 15
-            x_off, y_off = 20, 40
+            bar_width = 240
+            x_off, y_off = 20, 32
 
-            pygame.draw.rect(screen, (50, 50, 50), (x_off, y_off, bar_width, bar_height))
-            pygame.draw.rect(screen, (0, 200, 0), (x_off, y_off, int(bar_width * display_hp_ratio), bar_height)) 
-            # วาดสีแดงสดทับเมื่อเลือดจริงลดฮวบเพื่อให้เห็นช่องว่าง
-            if hp_ratio < display_hp_ratio:
-                 pygame.draw.rect(screen, (255, 0, 0), (x_off, y_off, int(bar_width * hp_ratio), bar_height))
+            def draw_pixel_bar(surf, x, y, w, h, ratio, trailing_ratio, color_bg, color_fill, color_trail):
+                # Background
+                pygame.draw.rect(surf, color_bg, (x, y, w, h))
+                
+                # Trailing effect (flashes when taking damage)
+                if trailing_ratio > ratio and color_trail:
+                    pygame.draw.rect(surf, color_trail, (x, y, int(w * trailing_ratio), h))
+                
+                # Actual fill
+                if ratio > 0:
+                    fill_w = int(w * ratio)
+                    pygame.draw.rect(surf, color_fill, (x, y, fill_w, h))
+                    
+                    # 3D Highlight at the top edge of the fill
+                    light = tuple(min(c + 60, 255) for c in color_fill)
+                    dark  = tuple(max(c - 50, 0)   for c in color_fill)
+                    pygame.draw.line(surf, light, (x, y), (x + fill_w - 1, y))
+                    # 3D Shadow at the bottom edge of the fill
+                    pygame.draw.line(surf, dark, (x, y + h - 1), (x + fill_w - 1, y + h - 1))
+
+                # Thick hard border (Dark Medieval style)
+                pygame.draw.rect(surf, (20, 15, 15), (x, y, w, h), 3)
+                
+                # Inner highlight rim
+                pygame.draw.rect(surf, (80, 70, 60), (x + 1, y + 1, w - 2, h - 2), 1)
+
+            # Draw HP Bar (Blood Red, thick)
+            draw_pixel_bar(screen, x_off, y_off, bar_width, 20, hp_ratio, display_hp_ratio, (40, 10, 10), (180, 20, 20), (255, 200, 50))
             
-            pygame.draw.rect(screen, (255, 255, 255), (x_off, y_off, bar_width, bar_height), 2)
-            
-            # วาดหลอด Stamina (ใต้หลอดเลือด)
-            pygame.draw.rect(screen, (50, 50, 50), (20, 60, 200, 10))
-            pygame.draw.rect(screen, (200, 200, 0), (20, 60, int(200 * (self._current_stamina / self._max_stamina)), 10))
-            pygame.draw.rect(screen, (255, 255, 255), (20, 60, 200, 10), 2)
+            # Draw Stamina Bar (Gold, thinner)
+            stam_y = y_off + 28
+            stam_ratio = self._current_stamina / self._max_stamina
+            draw_pixel_bar(screen, x_off, stam_y, 180, 12, stam_ratio, 0.0, (25, 25, 10), (210, 160, 20), None)
 
         # เลือก Sprite Sheet ตามสถานะการเดิน
         if self._is_hurt:
