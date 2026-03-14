@@ -383,7 +383,9 @@ class NightBorne(Enemy):
                     if self._attack_cooldown > 80:
                         move_dir = -1 if self._facing_right else 1 # เดินถอยหลังหลังโจมตี
                     elif abs_dist <= self._detect_range:
-                        move_dir = 1 if self._facing_right else -1 # เดินเข้าหาเพื่อล่า
+                        # เดินเข้าหาเพื่อล่า แต่หยุดถ้าระยะห่างน้อยกว่าระยะโจมตี (ป้องกันการเดินชนตัวผู้เล่น)
+                        if abs_dist > self._attack_range * 0.8:
+                            move_dir = 1 if self._facing_right else -1
                         
                     if move_dir != 0:
                         # เร่งความเร็วเป็น 1.5 เท่าตอนถอยฉุกเฉิน
