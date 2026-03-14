@@ -293,6 +293,7 @@ class SettingsMenu:
         self.music_volume  = 0.4
         self.sfx_volume    = 0.6
         self.screen_shake_on = True
+        self.show_fps      = False
 
         # Layout
         self.cx        = width // 2
@@ -313,6 +314,10 @@ class SettingsMenu:
         # Shake buttons
         self.shake_on_rect  = pygame.Rect(self.ctrl_x,       self.start_y + self.gap*3 - 5, 88, 38)
         self.shake_off_rect = pygame.Rect(self.ctrl_x + 100, self.start_y + self.gap*3 - 5, 88, 38)
+
+        # Show FPS buttons
+        self.fps_on_rect  = pygame.Rect(self.ctrl_x,       self.start_y + self.gap*4 - 5, 88, 38)
+        self.fps_off_rect = pygame.Rect(self.ctrl_x + 100, self.start_y + self.gap*4 - 5, 88, 38)
 
         # Back button
         self.back_btn_rect = pygame.Rect(0, 0, 220, 46)
@@ -336,6 +341,10 @@ class SettingsMenu:
                 play_click_sound(); self.screen_shake_on = True
             if self.shake_off_rect.collidepoint(mp):
                 play_click_sound(); self.screen_shake_on = False
+            if self.fps_on_rect.collidepoint(mp):
+                play_click_sound(); self.show_fps = True
+            if self.fps_off_rect.collidepoint(mp):
+                play_click_sound(); self.show_fps = False
 
         elif event.type == pygame.MOUSEMOTION and event.buttons[0]:
             if self.music_slider_rect.inflate(0, 40).collidepoint(event.pos):
@@ -400,6 +409,15 @@ class SettingsMenu:
         screen.blit(self.font_label.render("SCREEN SHAKE", False, C_DIM), (self.label_x, self.start_y + self.gap*3))
         for rect, label_str, val in [(self.shake_on_rect, "ON", True), (self.shake_off_rect, "OFF", False)]:
             active  = self.screen_shake_on == val
+            is_hov  = rect.collidepoint(mp)
+            draw_pixel_button(screen, rect, C_BLOOD if active else C_STONE, C_CRIMSON if active else C_STONE2, is_hov, C_GOLD_LIT if active else C_STONE2)
+            txt = self.font_body.render(label_str, False, C_GOLD if active else white)
+            screen.blit(txt, txt.get_rect(center=rect.center))
+
+        # ── Show FPS ──────────────────────────────────────────
+        screen.blit(self.font_label.render("SHOW FPS", False, C_DIM), (self.label_x, self.start_y + self.gap*4))
+        for rect, label_str, val in [(self.fps_on_rect, "ON", True), (self.fps_off_rect, "OFF", False)]:
+            active  = self.show_fps == val
             is_hov  = rect.collidepoint(mp)
             draw_pixel_button(screen, rect, C_BLOOD if active else C_STONE, C_CRIMSON if active else C_STONE2, is_hov, C_GOLD_LIT if active else C_STONE2)
             txt = self.font_body.render(label_str, False, C_GOLD if active else white)

@@ -207,21 +207,22 @@ class EvilWizard(Enemy):
                 
             if self._action != "hurt" and self._action != "attack":
                 move_dir = 0
-                # รักษาระยะห่างที่เหมาะสม (200 - 350 พิกเซล)
-                if abs_dist < 200: 
-                    # ถอยหลังหนี (ถ้าผู้เล่นอยู่ขวา ให้ไปซ้าย)
-                    move_dir = -1 if self._facing_right else 1
-                    self._speed = 2.5 # เร่งฝีเท้าตอนหนี
-                elif abs_dist > 350:
-                    # เดินเข้าหาเพื่อให้ได้ระยะยิง (ถ้าผู้เล่นอยู่ขวา ให้ไปขวา)
-                    move_dir = 1 if self._facing_right else -1
-                    self._speed = 1.8 # ความเร็วปกติ
-                else:
-                    # อยู่ในระยะยิงที่เหมาะสมแล้ว: โจมตี หรือ ยืนรอจังหวะ
-                    if self._attack_cooldown == 0:
-                        self.attack(player)
+                # ตรรกะการโจมตี: โจมตีได้ทุกระยะตราบที่อยู่ใน Range (350)
+                if abs_dist <= 350 and self._attack_cooldown == 0:
+                    self.attack(player)
+                    
+                # ตรรกะการเคลื่อนที่: รักษาระยะห่างที่เหมาะสม (200 - 350 พิกเซล)
+                if self._action != "attack":
+                    if abs_dist < 200: 
+                        # ถอยหลังหนี (ถ้าผู้เล่นอยู่ขวา ให้ไปซ้าย)
+                        move_dir = -1 if self._facing_right else 1
+                        self._speed = 2.5 # เร่งฝีเท้าตอนหนี
+                    elif abs_dist > 350:
+                        # เดินเข้าหาเพื่อให้ได้ระยะยิง (ถ้าผู้เล่นอยู่ขวา ให้ไปขวา)
+                        move_dir = 1 if self._facing_right else -1
+                        self._speed = 1.8 # ความเร็วปกติ
                     else:
-                        # ขยับตัวหยั่งเชิงเล็กน้อย (สุ่ม) ให้ดูฉลาด
+                        # อยู่ในระยะยิงที่เหมาะสมแล้ว: ขยับตัวหยั่งเชิงเล็กน้อย (สุ่ม) ให้ดูฉลาด
                         if random.random() < 0.02: move_dir = random.choice([-1, 1])
                 
                 if move_dir != 0:

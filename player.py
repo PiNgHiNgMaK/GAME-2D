@@ -49,14 +49,14 @@ class Player(Character):
         self._current_hp = 100
         self._display_hp = 100.0 # หลอดเลือดเสมือนสำหรับอนิเมชั่นไหลนุ่มๆ
         self._is_alive = True
-        self._damage = 100000
+        self._damage = 25
         self._name = ""
         self._font = None # สำหรับเก็บฟอนต์แบบ Pixel
     
         # เพิ่มระบบ Stamina
         self._max_stamina = 150
         self._current_stamina = 150
-        self._stamina_regen_rate = 1.0
+        self._stamina_regen_rate = 0.5
         self._stamina_exhausted = False # สถานะเหนื่อยหอบ (วิ่งไม่ได้จนกว่าจะพัก)
         
         # Load and set up sprite sheet
@@ -250,9 +250,9 @@ class Player(Character):
                 
                 return True # แจ้งกลับไปยังผู้ตีว่าโดน Parry
                 
-            # ถ้ายกโล่ป้องกันปกติ (หลังจากหน้าต่าง Parry หมด)
+            # ถ้ายกโล่ป้องกันปกติ (หากพลาดจังหวะ Parry) จะลดดาเมจเหลือครึ่งหนึ่ง (50%)
             if self._is_defending:
-                amount = int(amount * 0.1) 
+                amount = int(amount * 0.5) 
                 if hasattr(self, '_block_sound') and self._block_sound:
                     self._block_sound.play()
                 
