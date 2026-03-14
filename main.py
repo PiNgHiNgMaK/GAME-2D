@@ -98,15 +98,30 @@ try:
     else:
         HIT_SOUND = None
 
-    if os.path.exists("assets/sound/2.mp3"):
-        PLAYER_HURT_SOUND = pygame.mixer.Sound("assets/sound/2.mp3")
-        PLAYER_HURT_SOUND.set_volume(0.7)
-    else:
-        PLAYER_HURT_SOUND = None
-except:
-    SPAWN_SOUND = None
-    HIT_SOUND = None
-    PLAYER_HURT_SOUND = None
+    # ฟังก์ชันช่วยโหลดเสียงแบบปลอดภัย
+    def safe_load_sound(path, volume=1.0):
+        if os.path.exists(path):
+            try:
+                s = pygame.mixer.Sound(path)
+                s.set_volume(volume)
+                return s
+            except:
+                return None
+        return None
+
+    SPAWN_SOUND         = safe_load_sound("assets/sound/creatorshome-draw-a-sword-327726.mp3", 0.8)
+    HIT_SOUND           = safe_load_sound("assets/sound/1.mp3", 0.6)
+    PLAYER_HURT_SOUND   = safe_load_sound("assets/sound/2.mp3", 0.7)
+    CRYSTAL_BREAK_SOUND = safe_load_sound("assets/sound/universfield-glass-bottle-breaking-351297.mp3", 0.5)
+    IMPACT_THUD_SOUND   = safe_load_sound("assets/sound/impact_thud.mp3", 0.8)
+    WHOOSH_SOUND        = safe_load_sound("assets/sound/whoosh.mp3", 0.5)
+    ENDING_AMBIENT      = safe_load_sound("assets/sound/ending_ambient.mp3", 0.3)
+    BOSS_ROAR_SOUND     = safe_load_sound("assets/sound/boss_roar.mp3", 0.7)
+
+except Exception as e:
+    print(f"Error initializing sound system: {e}")
+    SPAWN_SOUND = HIT_SOUND = PLAYER_HURT_SOUND = None
+    CRYSTAL_BREAK_SOUND = IMPACT_THUD_SOUND = WHOOSH_SOUND = ENDING_AMBIENT = BOSS_ROAR_SOUND = None
 
 screen = pygame.display.set_mode((800, 500))
 pygame.display.set_caption("The Echo of the Abyss: Reversed Fate")
@@ -214,11 +229,14 @@ def change_scene(scene_num, player_new_x=None, player_new_right=None):
     global bg, game_areas, current_scene, health_potions, current_monsters, current_boss, current_boss_ui, scene_monster_data, scene_monsters_cleared, current_puzzle
     
     # 1. เล่นไฟล์เสียงเปลี่ยนฉาก (ถ้ามี)
-    try:
-        if os.path.exists("assets/sound/Menu Selection Click.wav"):
-            pygame.mixer.Sound("assets/sound/Menu Selection Click.wav").play()
-    except:
-        pass
+    if WHOOSH_SOUND: 
+        WHOOSH_SOUND.play()
+    else:
+        try:
+            if os.path.exists("assets/sound/Menu Selection Click.wav"):
+                pygame.mixer.Sound("assets/sound/Menu Selection Click.wav").play()
+        except:
+            pass
         
     # 2. ทำเอฟเฟกต์ Fade Out
     fade_surf = pygame.Surface((800, 500))
@@ -393,11 +411,7 @@ while running:
                 # เริ่มเกมเล่นเสียงชักดาบ และเปิดเพลงฉากหลัง (Loop бесконечно)
                 if SPAWN_SOUND:
                     SPAWN_SOUND.play()
-                try:
-                    pygame.mixer.music.play(-1)
-                except:
-                    pass
-                
+                pygame.mixer.music.play(-1)
                 # แสดงเนื้อเรื่องเปิดตอนเริ่มเกม
                 dialogue_manager.show_message(STORY_DATA["SCENE_1_START"])
             elif action == "settings":
@@ -453,7 +467,7 @@ while running:
                     game_state = "GAME"
 
     # ระบบจัดการเสียง (จัดการ Pause/Unpause ตามสถานะเกม)
-    if game_state in ["GAME", "PAUSED", "ENDING"]:
+    if game_state in ["GAME", "PAUSED"]:
         try:
             # ถ้าเพลงหยุดอยู่ ให้เล่นต่อ (ยกเว้นกด Mute ใน slider ที่วอลลุ่มจะเป็น 0)
             if not pygame.mixer.music.get_busy():
@@ -537,12 +551,22 @@ while running:
             # 3. อัปเดตตรรกะและฟิสิกส์ทั้งหมด
             player_old_hp = player.current_hp
             player.update(game_areas, dust_list=dust_particles)
-            
+            # เสียงกระแทกพื้น
+            if current_boss and getattr(current_boss, 'action', '') == "attack" and getattr(current_boss, 'frame_index', 0) == 12:
+                if IMPACT_THUD_SOUND: IMPACT_THUD_SOUND.play()
+                if settings_menu.screen_shake_on: screen_shake.trigger(20, 0.3)
+                        
             # อัปเดตบอส
             if current_boss and current_scene == 4:
                 if not hasattr(current_boss, '_last_hp'): current_boss._last_hp = current_boss.current_hp
                 boss_old_hp = current_boss._last_hp
                 current_boss.update(game_areas, player, shockwave_list=shockwaves)
+                
+                # บอสคำรามเมื่อมีโอกาส หรือเมื่อเข้าเฟส 2 (Berserk)
+                if current_boss.current_hp < current_boss.max_hp * 0.5 and not getattr(current_boss, '_roar_done', False):
+                    if BOSS_ROAR_SOUND: BOSS_ROAR_SOUND.play()
+                    current_boss._roar_done = True
+                    if settings_menu.screen_shake_on: screen_shake.trigger(40, 0.8)
                 
                 if current_boss.current_hp < boss_old_hp:
                     hit_stop_timer = 5 
@@ -586,7 +610,11 @@ while running:
 
             # อัปเดตพัซเซิล (ถ้ามี) ก่อนเอาไปเช็ค HP
             if current_puzzle:
+                was_cleared = getattr(current_puzzle, 'is_cleared', False)
                 current_puzzle.update(player, game_areas)
+                if getattr(current_puzzle, 'is_cleared', False) and not was_cleared:
+                    if CRYSTAL_BREAK_SOUND: CRYSTAL_BREAK_SOUND.play()
+                    if settings_menu.screen_shake_on: screen_shake.trigger(15, 0.4)
 
             # ตรวจสอบหลังจากอัปเดตทั้งหมด: ผู้เล่นโดนโจมตีหรือฮีล?
             if player.current_hp < player_old_hp:
@@ -604,8 +632,7 @@ while running:
             # ตรวจสอบการเก็บขวดเลือด
             for potion in health_potions[:]:
                 if player.rect.colliderect(potion):
-                    player.heal(50) # เพิ่มการฮีลเป็น 50 หน่วย
-                    if HIT_SOUND: HIT_SOUND.play() # ใช้เสียง Hit เป็นเสียงเก็บชั่วคราว
+                    player.heal(50) # Method heal ใน player.py จะเล่นเสียง player_heal.ogg ให้อยู่แล้ว
                     health_potions.remove(potion)
 
             # --- ระบบ Juice ---
@@ -678,6 +705,10 @@ while running:
             particles.append(Particle(random.randint(0, 800), 500, color=(255, 215, 0)))
         
         if ending_step == 0: # เริ่มฉากจบ
+            # เคลียร์เสียงทั้งหมดก่อนเริ่มฉากจบ
+            pygame.mixer.music.stop()
+            pygame.mixer.stop() 
+            
             # ปรับตำแหน่งผู้เล่นให้เหยียบพื้นและอยู่กึ่งกลางเยื้องซ้าย
             player._rect.bottom = 440
             player._rect.x = 200
@@ -686,8 +717,17 @@ while running:
             player._facing_right = True # หันหน้าไปหาพระอาทิตย์
             
             # โหลดพื้นหลังแบบเช้า
-            morning_bg = background(game_surface, [("C:\\Users\\ASUS\\.gemini\\antigravity\\brain\\51ce651b-fc1c-4e36-9dd1-dde4c702ed04\\morning_forest_ending_1773329692151.png", 1.0)])
+            if os.path.exists("background/ending_bg.png"):
+                morning_bg = background(game_surface, [("background/ending_bg.png", 1.0)])
+            else:
+                # Fallback ถ้าไฟล์รูปยังไม่มา
+                morning_bg = background(game_surface, [("background/bg-1.jpg", 1.0)])
+            
             bg = morning_bg # เปลี่ยนฉากหลังหลักเป็นตอนเช้าถาวร
+            if WHOOSH_SOUND: WHOOSH_SOUND.play()
+            if ENDING_AMBIENT: 
+                ENDING_AMBIENT.play(-1) # เล่นเสียงบรรยากาศวนลูป
+            
             dialogue_manager.show_message(STORY_DATA["ENDING_DAWN"])
             ending_step = 1
             
@@ -712,8 +752,8 @@ while running:
             else:
                 player._is_moving = False
             
-            # อัปเดตฟิสิกส์ให้ตัวละครยืนบนพื้น
-            player.update([WalkableArea(0, 440, 2000, 60)])
+            # อัปเดตฟิสิกส์ให้ตัวละครยืนบนพื้น (ไม่เล่นเสียงเดินเพื่อให้ได้บรรยากาศฉากจบ)
+            player.update([WalkableArea(0, 440, 2000, 60)], mute_footsteps=True)
             
             # Fade In (ค่อยๆ ปรากฏฉาก)
             if ending_step == 1 and ending_fade_alpha > 0:

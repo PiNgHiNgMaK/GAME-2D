@@ -32,6 +32,14 @@ class Enemy(Character):
         except: self._hurt_sound = None
     
     @property
+    def action(self):
+        return getattr(self, '_action', "idle")
+        
+    @property
+    def frame_index(self):
+        return getattr(self, '_current_frame', 0)
+
+    @property
     def is_alive(self):
         return self._is_alive
 
@@ -145,6 +153,14 @@ class DemonSlimeBoss(Enemy):
                 self._death_sound = None
         except:
             self._death_sound = None
+
+    @property
+    def action(self):
+        return self._action
+        
+    @property
+    def frame_index(self):
+        return self._current_frame
 
     def _load_frames(self, folder, prefix, count):
         frames = []

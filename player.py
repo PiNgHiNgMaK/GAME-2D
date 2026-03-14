@@ -49,13 +49,13 @@ class Player(Character):
         self._current_hp = 100
         self._display_hp = 100.0 # หลอดเลือดเสมือนสำหรับอนิเมชั่นไหลนุ่มๆ
         self._is_alive = True
-        self._damage = 200
+        self._damage = 100000
         self._name = ""
     
         # เพิ่มระบบ Stamina
         self._max_stamina = 150
         self._current_stamina = 150
-        self._stamina_regen_rate = 0.5
+        self._stamina_regen_rate = 50.0
         self._stamina_exhausted = False # สถานะเหนื่อยหอบ (วิ่งไม่ได้จนกว่าจะพัก)
         
         # Load and set up sprite sheet
@@ -429,7 +429,7 @@ class Player(Character):
             return True # เริ่มโจมตีสำเร็จ
         return False
 
-    def update(self, game_areas, dust_list=None):
+    def update(self, game_areas, dust_list=None, mute_footsteps=False):
         """Override เพื่ออัปเดตฟิสิกส์และการขยับภาพ (Animation)"""
         self._dust_list = dust_list
         if not self._is_alive:
@@ -457,7 +457,7 @@ class Player(Character):
         # จัดการเสียงเดิน/วิ่ง (แยกเสียงตามสถานะ)
         target_sound = self._run_sound if self._is_running else self._walk_sound
         
-        if target_sound and (self._is_moving or self._is_running) and not self._is_jumping and not self._is_hurt and not self._is_attacking and not self._is_defending:
+        if not mute_footsteps and target_sound and (self._is_moving or self._is_running) and not self._is_jumping and not self._is_hurt and not self._is_attacking and not self._is_defending:
             # ถ้าเสียงที่ควรเล่น ไม่ใช่เสียงที่กำลังเล่นอยู่
             if self._current_footstep_sound != target_sound:
                 if self._current_footstep_sound:
@@ -465,7 +465,7 @@ class Player(Character):
                 target_sound.play(loops=-1)
                 self._current_footstep_sound = target_sound
         else:
-            # หยุดเสียงถ้าไม่ได้เดิน/วิ่ง หรือติดสถานะอื่น
+            # หยุดเสียงถ้าไม่ได้เดิน/วิ่ง หรือติดสถานะอื่น หรือสั่ง Mute
             if self._current_footstep_sound:
                 self._current_footstep_sound.stop()
                 self._current_footstep_sound = None

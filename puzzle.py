@@ -2,6 +2,7 @@ import pygame
 import math
 import random
 import time
+import os
 from abc import ABC, abstractmethod
 
 # =====================================================================
@@ -159,6 +160,18 @@ class DeflectorPuzzleManager:
                 for crystal in self._crystals:
                     if not crystal.is_broken and crystal._rect.collidepoint(orb.pos):
                         crystal.break_crystal()
+                        # เล่นเสียงเมื่อผลึกแตกแต่ละอัน (ใช้เสียงที่ยูสเซอร์เลือกมาใหม่)
+                        try:
+                            s_path = "assets/sound/universfield-glass-bottle-breaking-351297.mp3"
+                            if not os.path.exists(s_path):
+                                s_path = "assets/sound/1.mp3"
+                                
+                            if os.path.exists(s_path):
+                                s = pygame.mixer.Sound(s_path)
+                                s.set_volume(0.5)
+                                s.play()
+                        except: pass
+                        
                         orb._is_active = False
                         # เช็คว่าเคลียร์หมดหรือยัง
                         if all(c.is_broken for c in self._crystals):
