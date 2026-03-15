@@ -374,6 +374,25 @@ pause_bg_surf = None # เก็บภาพเบลอตอนหยุดเ
 clock = pygame.time.Clock() # สร้างตัวควบคุมเวลา (FPS)
 running = True
 
+# ── Death Screen ─────────────────────────────────────────────────────
+DEATH_MESSAGES = [
+    "Darkness claims another soul...",
+    "The abyss gazes back.",
+    "Your legend ends here.",
+    "Even knights fall...",
+    "The kingdom weeps for thee.",
+    "Death is not the end — but it sure hurts.",
+    "A hero remembered. A battle lost.",
+    "Your oath remains unfulfilled.",
+    "The darkness grows stronger.",
+    "Rise again, if you dare.",
+]
+death_msg          = ""
+death_fade_alpha   = 0
+death_fade_state   = "none"
+death_hold_timer   = 0
+_death_fonts       = {}   # {"title": font, "msg": font}
+
 # จัดการ Scene/State หลักของหน้าจอ
 game_state = "MENU" 
 prev_game_state = "MENU" # ไว้จำว่าต้องกด back ไปไหนเมื่ออยู่หน้า settings
@@ -1022,16 +1041,67 @@ while running:
     # ตรวจสอบการพ่ายแพ้และชัยชนะ (เปลี่ยน State ไปที่ GAME_OVER)
     if not player.is_alive and game_state == "GAME":
         if death_cinematic_timer == 0:
-            death_cinematic_timer = 120 # เริ่ม Cinematic ตาย 2 วินาที (60fps * 2)
-            slow_mo_timer = 120 # สโลว์สุดขีด
+            death_cinematic_timer = 120
+            slow_mo_timer         = 120
             screen_shake.trigger(15, 0.8)
+            # เริ่ม fade + เลือกข้อความตาย random
+            death_msg        = random.choice(DEATH_MESSAGES)
+            death_fade_alpha = 0
+            death_fade_state = "fade_in"
+            death_hold_timer = 0
 
         if death_cinematic_timer > 0:
             death_cinematic_timer -= 1
-            if death_cinematic_timer <= 1: # เมื่อจบ cinematic
-                if not game_over_menu: # สร้างเมนูเมื่อตายครั้งแรก
-                    game_over_menu = GameOverMenu(800, 500, title="You Loose!", color=(255, 0, 0))
-                    game_state = "GAME_OVER"
+
+            # วาด Death Fade Overlay
+            if death_fade_state in ("fade_in", "hold"):
+                if "title" not in _death_fonts:
+                    pix_path = "assets/fonts/PressStart2P-Regular.ttf"
+                    if os.path.exists(pix_path):
+                        _death_fonts["title"] = pygame.font.Font(pix_path, 20)
+                        _death_fonts["msg"]   = pygame.font.Font(pix_path, 10)
+                    else:
+                        _death_fonts["title"] = pygame.font.SysFont("Arial", 36, bold=True)
+                        _death_fonts["msg"]   = pygame.font.SysFont("Arial", 18)
+
+                # ค่อยๆ มืดลง
+                if death_fade_state == "fade_in":
+                    death_fade_alpha = min(210, death_fade_alpha + 5)
+                    if death_fade_alpha >= 210:
+                        death_fade_state = "hold"
+                        death_hold_timer = 80   # ค้างไว้ 80 frame
+                elif death_fade_state == "hold":
+                    death_hold_timer -= 1
+                    if death_hold_timer <= 0:
+                        death_fade_state = "done"
+
+                # วาด overlay
+                d_surf = pygame.Surface((800, 500))
+                d_surf.fill((0, 0, 0))
+                d_surf.set_alpha(death_fade_alpha)
+                screen.blit(d_surf, (0, 0))
+
+                # วาดบนสุด: "YOU DIED" + ข้อความ random
+                if death_fade_alpha > 80:
+                    text_alpha = min(255, (death_fade_alpha - 80) * 4)
+
+                    # ตัวอักษร "YOU DIED" สีแดงเลือด
+                    died_surf = _death_fonts["title"].render("YOU DIED", True, (180, 20, 20))
+                    died_surf.set_alpha(text_alpha)
+                    dr = died_surf.get_rect(center=(400, 210))
+                    screen.blit(died_surf, dr)
+
+                    # ข้อความ random สีเทาอ่อน
+                    msg_surf = _death_fonts["msg"].render(death_msg, True, (180, 160, 140))
+                    msg_surf.set_alpha(text_alpha)
+                    mr = msg_surf.get_rect(center=(400, 260))
+                    screen.blit(msg_surf, mr)
+
+            if death_cinematic_timer <= 1:
+                if not game_over_menu:
+                    game_over_menu   = GameOverMenu(800, 500, title="YOU DIED", color=(180, 20, 20))
+                    game_state       = "GAME_OVER"
+                    death_fade_state = "none"
     elif current_scene == 4 and current_boss and not current_boss.is_alive and game_state == "GAME":
         if not dialogue_manager.is_showing:
             # Cinematic Finish for Boss
