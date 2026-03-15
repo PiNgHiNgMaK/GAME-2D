@@ -1,4 +1,4 @@
-import pygame
+﻿import pygame
 import os
 import random
 import math
@@ -305,21 +305,31 @@ class EvilWizard(Enemy):
             pygame.draw.rect(screen, (220, 0, 50), (self._rect.centerx - 25, self._rect.top - 15, int(50 * hp_ratio), 5))
 
 class NightBorne(Enemy):
-    """Monster จากฉากที่ 1"""
+    """Monster จากฉากที่ 1 + Dash Attack"""
+    DASH_RANGE  = 300   # ระยะเริ่ม dash
+    DASH_SPEED  = 13    # ความเร็ว dash
+
     def __init__(self, x, y):
         super().__init__(x, y, speed=2.2, hp=250, name="NightBorne")
         self._damage = 20
         self._sprite_manager = SpriteManager("assets/mons/NightBorne/NightBorne.png", cols=23, rows=5)
         self._rect = pygame.Rect(x, y, 90, 100)
-        self._detect_range = 800
-        self._attack_range = 80
+        self._detect_range  = 800
+        self._attack_range  = 80
         self._attack_cooldown = 0
-        self._facing_right = False
-        self._action = "idle" 
+        self._facing_right  = False
+        self._action        = "idle"
         self._current_frame = 0
         self._animation_timer = 0
-        self._current_row = 0
+        self._current_row   = 0
         self._hit_flash_timer = 0
+        self._knockback_vx  = 0
+        self._player_ref    = None
+
+        # Dash state
+        self._is_dashing  = False
+        self._dash_vx     = 0
+        self._dash_timer  = 0
 
         try:
             if os.path.exists("assets/sound/alexis_gaming_cam-epee-342933.mp3"):
@@ -328,13 +338,31 @@ class NightBorne(Enemy):
             else: self._attack_sound = None
         except: self._attack_sound = None
 
-    def take_damage(self, amount):
+    def take_damage(self, amount, attacker_x=None):
         if self._current_hp > 0 and self._action != "dead":
+            # ขณะ dash: โดนดาเมจแต่ไม่สะดุด
+            if self._is_dashing:
+                self._current_hp -= amount
+                if self._current_hp <= 0:
+                    self._current_hp = 0
+                    self._action = "dead"
+                    self._current_frame = 0
+                    self._is_dashing = False
+                self._hit_flash_timer = 6
+                if hasattr(self, '_hurt_sound') and self._hurt_sound:
+                    self._hurt_sound.play()
+                return
+            # ถูกสะดุดปกติ
             super().take_damage(amount)
             if self._current_hp <= 0:
                 self._action = "dead"
+                self._is_dashing = False
             else:
                 self._action = "hurt"
+                if attacker_x is not None:
+                    self._knockback_vx = 5 if self._rect.centerx > attacker_x else -5
+                else:
+                    self._knockback_vx = -5 if self._facing_right else 5
             self._current_frame = 0
             self._animation_timer = 0
 
@@ -354,15 +382,38 @@ class NightBorne(Enemy):
             self._display_hp -= (self._display_hp - self._current_hp) * 0.1
         if self._hit_flash_timer > 0:
             self._hit_flash_timer -= 1
-            
+
+        # Knockback
+        kv = self._knockback_vx
+        if kv != 0:
+            self._rect.x += int(kv)
+            self._knockback_vx = int(kv * 0.7)
+            if abs(self._knockback_vx) < 1:
+                self._knockback_vx = 0
+
+        # Dash movement
+        if self._is_dashing:
+            self._rect.x  += self._dash_vx
+            self._dash_timer -= 1
+            if self._dash_timer <= 0:
+                self._is_dashing = False
+                self._dash_vx   = 0
+                # จบ dash → โจมตีทันที
+                if self._action != "dead":
+                    self._action        = "attack"
+                    self._current_frame = 0
+                    self._animation_timer = 0
+                    self._attack_cooldown = 120
+                    if self._attack_sound: self._attack_sound.play()
+
         self._velocity_y += 0.5
-        self._rect.y += self._velocity_y
+        self._rect.y     += self._velocity_y
         for area in game_areas:
             if area.is_walkable() and self._rect.colliderect(area.rect):
                 if self._velocity_y > 0:
                     self._rect.bottom = area.rect.top
-                    self._velocity_y = 0
-            
+                    self._velocity_y  = 0
+
         self._update_animation(player)
 
     def _handle_ai(self, player, game_areas):
@@ -370,64 +421,72 @@ class NightBorne(Enemy):
             distance = player.rect.centerx - self._rect.centerx
             self._facing_right = distance > 0
             abs_dist = abs(distance)
-            abs_y = abs(player.rect.centery - self._rect.centery)
-            
+            abs_y    = abs(player.rect.centery - self._rect.centery)
+            self._player_ref = player
+
             if self._attack_cooldown > 0: self._attack_cooldown -= 1
-                
+
+            # ขณะ dash ไม่ต้องทำ AI อื่น
+            if self._is_dashing: return
+
             if self._action != "hurt":
-                # ตรวจสอบระยะโจมตี
-                if abs_dist <= self._attack_range and abs_y < 100 and self._attack_cooldown == 0 and self._action != "attack":
-                    self.attack(player)
+                if self._attack_cooldown == 0 and abs_y < 100 and self._action != "attack":
+                    if abs_dist <= self._attack_range:
+                        # โจมตีปกติ
+                        self.attack(player)
+                    elif abs_dist <= self.DASH_RANGE:
+                        # Dash attack
+                        self._is_dashing  = True
+                        self._dash_vx     = self.DASH_SPEED if self._facing_right else -self.DASH_SPEED
+                        self._dash_timer  = 10
+                        self._action      = "walk"
+                        self._attack_cooldown = 120
                 elif self._action != "attack":
-                    # พฤติกรรม Hit & Run: ถ้าเพิ่งตีเสร็จ (Cooldown สูง) ให้พยายามเว้นระยะห่าง
                     move_dir = 0
                     if self._attack_cooldown > 80:
-                        move_dir = -1 if self._facing_right else 1 # เดินถอยหลังหลังโจมตี
+                        move_dir = -1 if self._facing_right else 1
                     elif abs_dist <= self._detect_range:
-                        # เดินเข้าหาเพื่อล่า แต่หยุดถ้าระยะห่างน้อยกว่าระยะโจมตี (ป้องกันการเดินชนตัวผู้เล่น)
                         if abs_dist > self._attack_range * 0.8:
                             move_dir = 1 if self._facing_right else -1
-                        
+
                     if move_dir != 0:
-                        # เร่งความเร็วเป็น 1.5 เท่าตอนถอยฉุกเฉิน
                         adjusted_speed = self._speed * 1.5 if move_dir != (1 if self._facing_right else -1) else self._speed
-                        new_x = self._rect.x + (move_dir * adjusted_speed)
-                        # Check edge (ขอบพื้น)
+                        new_x   = self._rect.x + (move_dir * adjusted_speed)
                         check_x = new_x + (self._rect.width if move_dir > 0 else 0)
-                        check_rect = pygame.Rect(check_x, self._rect.bottom + 5, 2, 2)
-                        if any(a.is_walkable() and a.rect.colliderect(check_rect) for a in game_areas):
+                        check_r = pygame.Rect(check_x, self._rect.bottom + 5, 2, 2)
+                        if any(a.is_walkable() and a.rect.colliderect(check_r) for a in game_areas):
                             self._rect.x = new_x
                             self._action = "walk"
                         else: self._action = "idle"
                     else:
-                        # สุ่มขยับตัวเล็กน้อยเมื่อยืนเฉยๆ
                         if random.random() < 0.02: self._action = "walk"
                         else: self._action = "idle"
         else:
             if self._action not in ("attack", "hurt"): self._action = "idle"
 
     def attack(self, target):
-        self._action = "attack"
+        self._action        = "attack"
         self._current_frame = 0
         self._attack_cooldown = 120
         if self._attack_sound: self._attack_sound.play()
-        # ดาเมจทำตอนเฟรมอนิเมชั่น (LSP)
         self._player_ref = target
 
     def _update_animation(self, player=None):
         self._animation_timer += 1
         anim_data = {
-            "dead": (23, 4, 4), "hurt": (5, 6, 3), "attack": (12, 5, 2), "walk": (6, 5, 1), "idle": (9, 7, 0)
+            "dead":   (23, 4, 4), "hurt": (5, 6, 3),
+            "attack": (12, 5, 2), "walk": (6, 5, 1), "idle": (9, 7, 0)
         }
         max_f, speed, row = anim_data.get(self._action, (9, 7, 0))
-        
+
         if self._animation_timer >= speed:
             self._animation_timer = 0
-            self._current_frame += 1
-            self._current_row = row
-            
-            # ดรอปดาเมจตอนเฟรมที่ 11 (จังหวะดาบฟันลงพื้นพอดีเป๊ะ)
-            if self._action == "attack" and self._current_frame == 11 and hasattr(self, '_player_ref') and self._player_ref:
+            self._current_frame  += 1
+            self._current_row     = row
+
+            if (self._action == "attack" and self._current_frame == 11
+                    and self._player_ref is not None
+                    and getattr(self._player_ref, 'is_alive', False)):
                 dist = abs(self._player_ref.rect.centerx - self._rect.centerx)
                 if dist <= self._attack_range + 50:
                     self._player_ref.take_damage(self._damage)
@@ -443,12 +502,30 @@ class NightBorne(Enemy):
 
     def draw(self, screen):
         if not self._is_alive: return
-        img = self._sprite_manager.get_frame(self._current_row, self._current_frame, scale=4.5, flip=not self._facing_right)
+        img = self._sprite_manager.get_frame(
+            self._current_row, self._current_frame,
+            scale=4.5, flip=not self._facing_right
+        )
         if self._hit_flash_timer > 0:
-            f = img.copy(); f.fill((255,255,255), special_flags=pygame.BLEND_RGB_ADD); f.set_alpha(150); img.blit(f, (0,0))
-        r = img.get_rect(); r.midbottom = (self._rect.centerx, self._rect.bottom + 95)
+            f = img.copy()
+            f.fill((255, 255, 255), special_flags=pygame.BLEND_RGB_ADD)
+            f.set_alpha(150)
+            img.blit(f, (0, 0))
+
+        # Dash trail
+        if self._is_dashing:
+            ghost = img.copy()
+            ghost.set_alpha(70)
+            gr = ghost.get_rect()
+            gr.midbottom = (self._rect.centerx - self._dash_vx * 3, self._rect.bottom + 95)
+            screen.blit(ghost, gr)
+
+        r = img.get_rect()
+        r.midbottom = (self._rect.centerx, self._rect.bottom + 95)
         screen.blit(img, r)
         if self._current_hp < self._max_hp:
             ratio = self._current_hp / self._max_hp
-            pygame.draw.rect(screen, (50,50,50), (self._rect.centerx-20, self._rect.top-15, 40, 5))
-            pygame.draw.rect(screen, (200,0,0), (self._rect.centerx-20, self._rect.top-15, int(40*ratio), 5))
+            pygame.draw.rect(screen, (50, 50, 50), (self._rect.centerx - 20, self._rect.top - 15, 40, 5))
+            pygame.draw.rect(screen, (200, 0, 0),  (self._rect.centerx - 20, self._rect.top - 15, int(40 * ratio), 5))
+
+
